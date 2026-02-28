@@ -8,7 +8,7 @@ import {
   writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { getDb } from './firebase'
 import type { DailyRecord } from './types'
 import { generateStudyRecords, STUDY_DAYS } from './storage'
 
@@ -19,6 +19,7 @@ function dayDocId(dayNumber: number) {
 }
 
 export async function ensureSeededDays() {
+  const db = getDb()
   const colRef = collection(db, DAYS_COLLECTION)
   const countSnap = await getCountFromServer(colRef)
   if (countSnap.data().count > 0) return
@@ -35,6 +36,7 @@ export function subscribeDays(
   onRecords: (records: DailyRecord[]) => void,
   onError?: (err: unknown) => void,
 ): Unsubscribe {
+  const db = getDb()
   const colRef = collection(db, DAYS_COLLECTION)
   return onSnapshot(
     colRef,
@@ -67,6 +69,7 @@ export function subscribeDays(
 }
 
 export async function updateDay(dayNumber: number, patch: Partial<DailyRecord>) {
+  const db = getDb()
   await setDoc(
     doc(db, DAYS_COLLECTION, dayDocId(dayNumber)),
     { ...patch, dayNumber, updatedAt: serverTimestamp() },

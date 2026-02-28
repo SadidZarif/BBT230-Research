@@ -1,15 +1,66 @@
-import { initializeApp } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
+import { initializeApp, type FirebaseApp } from 'firebase/app'
+import { getFirestore, type Firestore } from 'firebase/firestore'
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID as string,
+type FirebaseEnvKey =
+  | 'VITE_FIREBASE_API_KEY'
+  | 'VITE_FIREBASE_AUTH_DOMAIN'
+  | 'VITE_FIREBASE_PROJECT_ID'
+  | 'VITE_FIREBASE_STORAGE_BUCKET'
+  | 'VITE_FIREBASE_MESSAGING_SENDER_ID'
+  | 'VITE_FIREBASE_APP_ID'
+
+const REQUIRED_ENV_KEYS: FirebaseEnvKey[] = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+]
+
+function getMissingFirebaseEnvKeys() {
+  const env = import.meta.env as unknown as Record<string, unknown>
+  return REQUIRED_ENV_KEYS.filter((k) => {
+    const v = env[k]
+    return typeof v !== 'string' || v.trim().length === 0
+  })
 }
 
-export const firebaseApp = initializeApp(firebaseConfig)
-export const db = getFirestore(firebaseApp)
+let _app: FirebaseApp | null = null
+let _db: Firestore | null = null
+let _initError: Error | null = null
+
+function initFirebaseOnce() {
+  if (_app || _db || _initError) return
+
+  const missing = getMissingFirebaseEnvKeys()
+  if (missing.length > 0) {
+    _initError = new Error(`Missing Firebase env: ${missing.join(', ')}`)
+    return
+  }
+
+  const env = import.meta.env as unknown as Record<string, string>
+  const firebaseConfig = {
+    apiKey: env.VITE_FIREBASE_API_KEY,
+    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: env.VITE_FIREBASE_APP_ID,
+  }
+
+  _app = initializeApp(firebaseConfig)
+  _db = getFirestore(_app)
+}
+
+export function getDb(): Firestore {
+  initFirebaseOnce()
+  if (_db) return _db
+  throw _initError ?? new Error('Firebase is not configured')
+}
+
+export function getFirebaseInitErrorMessage(): string | null {
+  initFirebaseOnce()
+  return _initError?.message ?? null
+}
 

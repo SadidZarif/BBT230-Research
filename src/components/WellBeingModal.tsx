@@ -43,7 +43,7 @@ export function WellBeingModal({
     <AnimatePresence>
       {open && row ? (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -52,7 +52,7 @@ export function WellBeingModal({
           }}
         >
           <motion.div
-            className="modal-glass w-full max-w-4xl rounded-3xl relative overflow-hidden flex flex-col md:flex-row shadow-modal border border-primary/30"
+            className="modal-glass w-full max-w-4xl rounded-3xl relative overflow-hidden shadow-modal border border-primary/30 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)]"
             ref={modalRef}
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -71,94 +71,96 @@ export function WellBeingModal({
               <span className="material-symbols-outlined">close</span>
             </button>
 
-            {/* Left score panel */}
-            <div className="w-full md:w-1/3 bg-gradient-to-b from-primary/10 to-transparent p-8 flex flex-col items-center justify-center border-r border-white/5 relative">
-              <div className="absolute top-6 left-6 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-600/50 text-xs font-bold text-slate-300 backdrop-blur-md shadow-lg">
-                {fmtLongDate(row.dateISO)}
-              </div>
+            {/* Scroll body (mobile-safe) */}
+            <div className="relative z-10 w-full h-full overflow-y-auto overscroll-contain min-h-0 flex flex-col md:flex-row">
+              {/* Left score panel */}
+              <div className="w-full md:w-1/3 bg-gradient-to-b from-primary/10 to-transparent p-6 sm:p-8 flex flex-col items-center justify-start md:justify-center border-b md:border-b-0 md:border-r border-white/5 relative">
+                <div className="absolute top-6 left-6 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-600/50 text-xs font-bold text-slate-300 backdrop-blur-md shadow-lg">
+                  {fmtLongDate(row.dateISO)}
+                </div>
 
-              <div className="relative w-48 h-48 flex items-center justify-center mb-6 floating-score perspective-[1000px]">
-                <div className="absolute inset-0 rounded-full border-[6px] border-primary/20 transform rotate-x-12 shadow-[0_0_30px_rgba(99,102,241,0.2)]" />
-                <div className="absolute inset-2 rounded-full border-[2px] border-accent/20 transform -rotate-x-12" />
+                <div className="relative w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center mb-6 floating-score perspective-[1000px] mt-10 md:mt-0">
+                  <div className="absolute inset-0 rounded-full border-[6px] border-primary/20 transform rotate-x-12 shadow-[0_0_30px_rgba(99,102,241,0.2)]" />
+                  <div className="absolute inset-2 rounded-full border-[2px] border-accent/20 transform -rotate-x-12" />
 
-                <div className="w-36 h-36 rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 shadow-[inset_-10px_-10px_20px_rgba(0,0,0,0.5),inset_10px_10px_20px_rgba(255,255,255,0.4),0_0_50px_rgba(99,102,241,0.6)] flex items-center justify-center relative z-10 border border-white/20">
-                  <div className="text-center">
-                    <span className="block text-5xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
-                      {round2(row.wellBeingScore).toFixed(2)}
+                  <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 shadow-[inset_-10px_-10px_20px_rgba(0,0,0,0.5),inset_10px_10px_20px_rgba(255,255,255,0.4),0_0_50px_rgba(99,102,241,0.6)] flex items-center justify-center relative z-10 border border-white/20">
+                    <div className="text-center">
+                      <span className="block text-4xl sm:text-5xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                        {round2(row.wellBeingScore).toFixed(2)}
+                      </span>
+                      <span className="text-xs font-bold text-indigo-100 uppercase tracking-widest mt-1">
+                        Score / 5
+                      </span>
+                    </div>
+                    <div className="absolute top-4 left-6 w-12 h-6 bg-white/20 rounded-full blur-[8px] transform -rotate-45" />
+                  </div>
+                </div>
+
+                <h2 className="text-2xl font-bold text-white text-center mb-1">Daily Well-Being</h2>
+                <p className="text-slate-400 text-sm text-center mb-6">Report &amp; Analysis</p>
+
+                <div className="relative group cursor-default w-full max-w-[280px]">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-lg blur opacity-40 group-hover:opacity-75 transition duration-1000 group-hover:duration-200" />
+                  <div className="relative px-6 py-3 bg-slate-900 ring-1 ring-gray-900/5 rounded-lg leading-none flex items-center space-x-3 shadow-3d transform transition-transform group-hover:scale-[1.02]">
+                    <span className="material-symbols-outlined text-pink-500">campaign</span>
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-slate-400 font-semibold uppercase">Shout Level</p>
+                      <p className="text-white font-bold text-base">{shoutLabel(row.shoutLevel)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Well-being bar (requested) */}
+                <div className="w-full max-w-[280px] mt-6 pb-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
+                      Well-Being Bar
                     </span>
-                    <span className="text-xs font-bold text-indigo-100 uppercase tracking-widest mt-1">
-                      Score / 5
+                    <span className="text-xs font-mono text-accent">
+                      {(row.wellBeingScore / 5).toFixed(2)}
                     </span>
                   </div>
-                  <div className="absolute top-4 left-6 w-12 h-6 bg-white/20 rounded-full blur-[8px] transform -rotate-45" />
-                </div>
-              </div>
-
-              <h2 className="text-2xl font-bold text-white text-center mb-1">Daily Well-Being</h2>
-              <p className="text-slate-400 text-sm text-center mb-6">Report &amp; Analysis</p>
-
-              <div className="relative group cursor-default w-full max-w-[280px]">
-                <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-lg blur opacity-40 group-hover:opacity-75 transition duration-1000 group-hover:duration-200" />
-                <div className="relative px-6 py-3 bg-slate-900 ring-1 ring-gray-900/5 rounded-lg leading-none flex items-center space-x-3 shadow-3d transform transition-transform group-hover:scale-[1.02]">
-                  <span className="material-symbols-outlined text-pink-500">campaign</span>
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-400 font-semibold uppercase">Shout Level</p>
-                    <p className="text-white font-bold text-base">{shoutLabel(row.shoutLevel)}</p>
+                  <div className="glass-card rounded-xl p-3 border border-white/5">
+                    <div className="h-3 rounded-full bg-slate-800/70 overflow-hidden border border-white/5">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-primary via-secondary to-accent shadow-neon"
+                        style={{ width: `${clampPct((row.wellBeingScore / 5) * 100)}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Well-being bar (requested) */}
-              <div className="w-full max-w-[280px] mt-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
-                    Well-Being Bar
-                  </span>
-                  <span className="text-xs font-mono text-accent">
-                    {(row.wellBeingScore / 5).toFixed(2)}
-                  </span>
-                </div>
-                <div className="glass-card rounded-xl p-3 border border-white/5">
-                  <div className="h-3 rounded-full bg-slate-800/70 overflow-hidden border border-white/5">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-primary via-secondary to-accent shadow-neon"
-                      style={{ width: `${clampPct((row.wellBeingScore / 5) * 100)}%` }}
-                    />
+              {/* Right breakdown panel */}
+              <div className="w-full md:w-2/3 p-6 sm:p-8 flex flex-col relative min-h-0">
+                <div
+                  className="absolute inset-0 z-0 opacity-5 pointer-events-none"
+                  style={{
+                    backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)',
+                    backgroundSize: '20px 20px',
+                  }}
+                />
+
+                <div className="flex justify-between items-end mb-6 sm:mb-10 z-10 relative">
+                  <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      <span className="w-2 h-6 bg-accent rounded-sm shadow-neon-accent" />
+                      Variable Breakdown
+                    </h3>
+                    <p className="text-slate-400 text-sm mt-1 ml-4">
+                      Correlated impact factors for the selected day.
+                    </p>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Right breakdown panel */}
-            <div className="w-full md:w-2/3 p-8 flex flex-col relative">
-              <div
-                className="absolute inset-0 z-0 opacity-5 pointer-events-none"
-                style={{
-                  backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)',
-                  backgroundSize: '20px 20px',
-                }}
-              />
-
-              <div className="flex justify-between items-end mb-10 z-10 relative">
-                <div>
-                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    <span className="w-2 h-6 bg-accent rounded-sm shadow-neon-accent" />
-                    Variable Breakdown
-                  </h3>
-                  <p className="text-slate-400 text-sm mt-1 ml-4">
-                    Correlated impact factors for the selected day.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex-1 flex items-end justify-between px-4 pb-8 perspective-[1000px] gap-4 z-10 relative h-[300px]">
-                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-12 opacity-20">
-                  <div className="w-full h-px bg-slate-400 border-dashed border-b border-slate-400" />
-                  <div className="w-full h-px bg-slate-400 border-dashed border-b border-slate-400" />
-                  <div className="w-full h-px bg-slate-400 border-dashed border-b border-slate-400" />
-                  <div className="w-full h-px bg-slate-400 border-dashed border-b border-slate-400" />
-                  <div className="w-full h-px bg-slate-400" />
-                </div>
+                <div className="flex-1 flex items-end justify-between px-2 sm:px-4 pb-6 sm:pb-8 perspective-[1000px] gap-3 sm:gap-4 z-10 relative h-[220px] sm:h-[260px] md:h-[300px]">
+                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-10 opacity-20">
+                    <div className="w-full h-px bg-slate-400 border-dashed border-b border-slate-400" />
+                    <div className="w-full h-px bg-slate-400 border-dashed border-b border-slate-400" />
+                    <div className="w-full h-px bg-slate-400 border-dashed border-b border-slate-400" />
+                    <div className="w-full h-px bg-slate-400 border-dashed border-b border-slate-400" />
+                    <div className="w-full h-px bg-slate-400" />
+                  </div>
 
                 <MetricBar
                   icon="bedtime"
@@ -214,17 +216,18 @@ export function WellBeingModal({
                   glow="shadow-[0_0_25px_rgba(236,72,153,0.3)]"
                   iconColor="text-pink-400"
                 />
-              </div>
+                </div>
 
-              <div className="mt-4 pt-4 border-t border-slate-700/50 flex justify-between items-center">
-                <span className="text-xs text-slate-500 font-medium italic">
-                  Data generated from research study #4021
-                </span>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
-                  <span className="text-xs text-slate-300 font-semibold uppercase tracking-wide">
-                    Sync Complete
+                <div className="mt-4 pt-4 border-t border-slate-700/50 flex justify-between items-center">
+                  <span className="text-xs text-slate-500 font-medium italic">
+                    Data generated from research study #4021
                   </span>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
+                    <span className="text-xs text-slate-300 font-semibold uppercase tracking-wide">
+                      Sync Complete
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
