@@ -57,6 +57,9 @@ export default function App() {
   )
   const [modalDay, setModalDay] = useState<number | null>(null)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
+  const [sync, setSync] = useState<{ mode: 'cloud' | 'local' | 'error'; message?: string }>({
+    mode: 'local',
+  })
 
   const rows: DailyRow[] = useMemo(() => {
     return records.map((r) => ({ ...r, ...computeDailyScores(r) }))
@@ -72,12 +75,31 @@ export default function App() {
     let unsub: (() => void) | null = null
     ;(async () => {
       try {
-        await ensureSeededDays()
-        unsub = subscribeDays((next) => {
-          setRecords(normalizeRecordsToStudySchedule(next))
+        // Subscribe first (so we can detect auth/rules/network errors).
+        unsub = subscribeDays(
+          (next) => {
+            setRecords(normalizeRecordsToStudySchedule(next))
+            setSync({ mode: 'cloud' })
+          },
+          (err) => {
+            const msg =
+              err && typeof err === 'object' && 'message' in err
+                ? String((err as { message?: unknown }).message)
+                : 'Cloud sync error'
+            setSync({ mode: 'error', message: msg })
+          },
+        )
+
+        // Seed in background (if empty). If it fails, we still keep local fallback.
+        ensureSeededDays().catch((e) => {
+          const msg =
+            e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : 'Seed failed'
+          setSync((s) => (s.mode === 'cloud' ? s : { mode: 'error', message: msg }))
         })
-      } catch {
-        // If Firestore is unavailable (offline / rules), localStorage remains the fallback.
+      } catch (e) {
+        const msg =
+          e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : 'Cloud sync unavailable'
+        setSync({ mode: 'error', message: msg })
       }
     })()
     return () => {
@@ -88,7 +110,11 @@ export default function App() {
   function updateRecord(dayNumber: number, patch: Partial<DailyRecord>) {
     // Optimistic UI update + async Firestore write
     setRecords((prev) => prev.map((r) => (r.dayNumber === dayNumber ? { ...r, ...patch } : r)))
-    updateDay(dayNumber, patch).catch(() => {})
+    updateDay(dayNumber, patch).catch((e) => {
+      const msg =
+        e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : 'Cloud write failed'
+      setSync({ mode: 'error', message: msg })
+    })
   }
 
   const totalDays = STUDY_DAYS
@@ -133,6 +159,16 @@ export default function App() {
           <span className="text-sm text-slate-300 font-medium">
             Study Active: Day {completedDays} of {totalDays}
           </span>
+        </div>
+
+        <div className="mt-3 text-xs font-mono text-slate-400">
+          {sync.mode === 'cloud' ? (
+            <span className="text-green-300">Cloud Sync: Connected</span>
+          ) : sync.mode === 'error' ? (
+            <span className="text-red-300">Cloud Sync: Error — {sync.message ?? 'unknown'}</span>
+          ) : (
+            <span className="text-yellow-300">Cloud Sync: Local only (not connected)</span>
+          )}
         </div>
       </header>
 

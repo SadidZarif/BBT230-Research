@@ -31,30 +31,39 @@ export async function ensureSeededDays() {
   await batch.commit()
 }
 
-export function subscribeDays(onRecords: (records: DailyRecord[]) => void): Unsubscribe {
+export function subscribeDays(
+  onRecords: (records: DailyRecord[]) => void,
+  onError?: (err: unknown) => void,
+): Unsubscribe {
   const colRef = collection(db, DAYS_COLLECTION)
-  return onSnapshot(colRef, (snap) => {
-    const base = generateStudyRecords()
-    const byDay = new Map<number, DailyRecord>(base.map((r) => [r.dayNumber, r]))
+  return onSnapshot(
+    colRef,
+    (snap) => {
+      const base = generateStudyRecords()
+      const byDay = new Map<number, DailyRecord>(base.map((r) => [r.dayNumber, r]))
 
-    for (const d of snap.docs) {
-      const data = d.data() as Partial<DailyRecord>
-      const dayNumber = Number(data.dayNumber ?? d.id)
-      if (!Number.isFinite(dayNumber)) continue
-      if (dayNumber < 1 || dayNumber > STUDY_DAYS) continue
+      for (const d of snap.docs) {
+        const data = d.data() as Partial<DailyRecord>
+        const dayNumber = Number(data.dayNumber ?? d.id)
+        if (!Number.isFinite(dayNumber)) continue
+        if (dayNumber < 1 || dayNumber > STUDY_DAYS) continue
 
-      const prev = byDay.get(dayNumber)
-      if (!prev) continue
-      byDay.set(dayNumber, {
-        ...prev,
-        ...data,
-        dayNumber,
-      } as DailyRecord)
-    }
+        const prev = byDay.get(dayNumber)
+        if (!prev) continue
+        byDay.set(dayNumber, {
+          ...prev,
+          ...data,
+          dayNumber,
+        } as DailyRecord)
+      }
 
-    const out = Array.from(byDay.values()).sort((a, b) => a.dayNumber - b.dayNumber)
-    onRecords(out)
-  })
+      const out = Array.from(byDay.values()).sort((a, b) => a.dayNumber - b.dayNumber)
+      onRecords(out)
+    },
+    (err) => {
+      onError?.(err)
+    },
+  )
 }
 
 export async function updateDay(dayNumber: number, patch: Partial<DailyRecord>) {
