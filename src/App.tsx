@@ -5,6 +5,7 @@ import { loadRecords, normalizeRecordsToStudySchedule, saveRecords, STUDY_DAYS }
 import { EntryTable } from './components/EntryTable'
 import { WellBeingModal } from './components/WellBeingModal'
 import { AnalyticsView } from './components/AnalyticsView'
+import { ensureSeededDays, subscribeDays, updateDay } from './firestoreDays'
 
 function downloadTextFile(filename: string, text: string) {
   const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })
@@ -67,10 +68,27 @@ export default function App() {
     saveRecords(records)
   }, [records])
 
+  useEffect(() => {
+    let unsub: (() => void) | null = null
+    ;(async () => {
+      try {
+        await ensureSeededDays()
+        unsub = subscribeDays((next) => {
+          setRecords(normalizeRecordsToStudySchedule(next))
+        })
+      } catch {
+        // If Firestore is unavailable (offline / rules), localStorage remains the fallback.
+      }
+    })()
+    return () => {
+      if (unsub) unsub()
+    }
+  }, [])
+
   function updateRecord(dayNumber: number, patch: Partial<DailyRecord>) {
-    setRecords((prev) =>
-      prev.map((r) => (r.dayNumber === dayNumber ? { ...r, ...patch } : r)),
-    )
+    // Optimistic UI update + async Firestore write
+    setRecords((prev) => prev.map((r) => (r.dayNumber === dayNumber ? { ...r, ...patch } : r)))
+    updateDay(dayNumber, patch).catch(() => {})
   }
 
   const totalDays = STUDY_DAYS
