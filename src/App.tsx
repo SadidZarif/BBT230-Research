@@ -6,6 +6,9 @@ import { EntryTable } from './components/EntryTable'
 import { WellBeingModal } from './components/WellBeingModal'
 import { AnalyticsView } from './components/AnalyticsView'
 import { ensureSeededDays, subscribeDays, updateDay } from './firestoreDays'
+import { getFirebaseInitErrorMessage } from './firebase'
+import { isAllowedEmail, loginWithGoogle, logout, subscribeAuth } from './auth'
+import type { User } from 'firebase/auth'
 
 function downloadTextFile(filename: string, text: string) {
   const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })
@@ -60,6 +63,9 @@ export default function App() {
   const [sync, setSync] = useState<{ mode: 'cloud' | 'local' | 'error'; message?: string }>({
     mode: 'local',
   })
+  const [authReady, setAuthReady] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
+  const [authActionError, setAuthActionError] = useState<string | null>(null)
 
   const rows: DailyRow[] = useMemo(() => {
     return records.map((r) => ({ ...r, ...computeDailyScores(r) }))
@@ -72,9 +78,24 @@ export default function App() {
   }, [records])
 
   useEffect(() => {
+    const unsub = subscribeAuth((u) => {
+      setUser(u)
+      setAuthReady(true)
+    })
+    return () => unsub()
+  }, [])
+
+  const allowed = useMemo(() => isAllowedEmail(user?.email), [user?.email])
+
+  useEffect(() => {
     let unsub: (() => void) | null = null
     ;(async () => {
       try {
+        if (!authReady) return
+        if (!allowed) {
+          setSync({ mode: 'local' })
+          return
+        }
         // Subscribe first (so we can detect auth/rules/network errors).
         unsub = subscribeDays(
           (next) => {
@@ -105,16 +126,20 @@ export default function App() {
     return () => {
       if (unsub) unsub()
     }
-  }, [])
+  }, [authReady, allowed])
 
   function updateRecord(dayNumber: number, patch: Partial<DailyRecord>) {
     // Optimistic UI update + async Firestore write
     setRecords((prev) => prev.map((r) => (r.dayNumber === dayNumber ? { ...r, ...patch } : r)))
-    updateDay(dayNumber, patch).catch((e) => {
-      const msg =
-        e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : 'Cloud write failed'
-      setSync({ mode: 'error', message: msg })
-    })
+    if (allowed) {
+      updateDay(dayNumber, patch).catch((e) => {
+        const msg =
+          e && typeof e === 'object' && 'message' in e
+            ? String((e as { message?: unknown }).message)
+            : 'Cloud write failed'
+        setSync({ mode: 'error', message: msg })
+      })
+    }
   }
 
   const totalDays = STUDY_DAYS
@@ -136,6 +161,105 @@ export default function App() {
     return n
   })()
 
+  const firebaseInitError = getFirebaseInitErrorMessage()
+
+  if (firebaseInitError) {
+    return (
+      <div className="w-full min-h-screen flex flex-col items-center justify-center px-6">
+        <div className="glass-card max-w-xl w-full p-6 rounded-2xl border border-red-500/30">
+          <h2 className="text-xl font-bold text-white mb-2">Firebase configuration missing</h2>
+          <p className="text-slate-300 text-sm font-mono break-words">{firebaseInitError}</p>
+          <p className="text-slate-400 text-xs mt-3">
+            Fix your Vite env variables (GitHub Secrets for deploy, <code className="font-mono">.env.local</code> for
+            local).
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authReady) {
+    return (
+      <div className="w-full min-h-screen flex flex-col items-center justify-center px-6">
+        <div className="glass-card max-w-md w-full p-6 rounded-2xl border border-white/10 text-center">
+          <div className="text-white font-black text-2xl mb-2">BBT230 Research</div>
+          <div className="text-slate-400 text-sm">Checking sign-in status…</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="w-full min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden">
+        {/* background blobs */}
+        <div className="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/20 rounded-full blur-[120px] pointer-events-none z-0" />
+        <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-secondary/20 rounded-full blur-[120px] pointer-events-none z-0" />
+        <div className="fixed top-[10%] right-[20%] w-[30%] h-[30%] bg-accent/10 rounded-full blur-[100px] pointer-events-none z-0" />
+
+        <div className="glass-card max-w-lg w-full p-7 sm:p-8 rounded-3xl border border-white/10 shadow-glass relative z-10">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 drop-shadow-lg">
+            BBT230 Research
+          </h1>
+          <p className="mt-2 text-slate-400 text-sm">
+            Sign in with the authorized Google account to access the 40-day study dashboard.
+          </p>
+
+          {authActionError ? (
+            <div className="mt-4 text-xs font-mono text-red-300 bg-red-900/20 border border-red-500/20 rounded-xl p-3">
+              {authActionError}
+            </div>
+          ) : null}
+
+          <button
+            className="btn-3d mt-6 w-full py-3 rounded-xl font-bold tracking-wide"
+            onClick={async () => {
+              setAuthActionError(null)
+              try {
+                await loginWithGoogle()
+              } catch (e) {
+                const msg =
+                  e && typeof e === 'object' && 'message' in e
+                    ? String((e as { message?: unknown }).message)
+                    : 'Sign-in failed'
+                setAuthActionError(msg)
+              }
+            }}
+          >
+            Continue with Google
+          </button>
+
+          <p className="mt-3 text-xs text-slate-500">
+            Allowed email: <span className="font-mono text-slate-300">samia.ridheeka.251@northsouth.edu</span>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!allowed) {
+    return (
+      <div className="w-full min-h-screen flex flex-col items-center justify-center px-6">
+        <div className="glass-card max-w-lg w-full p-7 rounded-3xl border border-red-500/20 shadow-glass text-center">
+          <h2 className="text-2xl font-black text-white">Access denied</h2>
+          <p className="mt-2 text-slate-400 text-sm">
+            You are signed in as <span className="font-mono text-slate-200">{user.email ?? 'unknown'}</span>, but this
+            app is restricted to:
+          </p>
+          <div className="mt-3 font-mono text-sm text-accent">samia.ridheeka.251@northsouth.edu</div>
+          <button
+            className="btn-3d mt-6 w-full py-3 rounded-xl font-bold tracking-wide"
+            onClick={async () => {
+              await logout()
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="w-full flex flex-col items-center relative">
       {/* background blobs (match HTML) */}
@@ -150,6 +274,13 @@ export default function App() {
         <p className="text-lg md:text-xl font-medium text-accent tracking-wide uppercase">
           by Samia Chowdhury Ridheeka
         </p>
+
+        <div className="mt-3 text-xs font-mono text-slate-400">
+          Signed in as <span className="text-slate-200">{user.email}</span>{' '}
+          <button className="text-primary hover:underline ml-2" onClick={() => logout()}>
+            Sign out
+          </button>
+        </div>
 
         <div className="mt-4 flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800/50 border border-slate-700 backdrop-blur-sm">
           <span className="relative flex h-3 w-3">

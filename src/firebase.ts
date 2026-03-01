@@ -1,5 +1,6 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import { getFirestore, type Firestore } from 'firebase/firestore'
+import { getAuth, type Auth } from 'firebase/auth'
 
 type FirebaseEnvKey =
   | 'VITE_FIREBASE_API_KEY'
@@ -28,10 +29,11 @@ function getMissingFirebaseEnvKeys() {
 
 let _app: FirebaseApp | null = null
 let _db: Firestore | null = null
+let _auth: Auth | null = null
 let _initError: Error | null = null
 
 function initFirebaseOnce() {
-  if (_app || _db || _initError) return
+  if (_app || _initError) return
 
   const missing = getMissingFirebaseEnvKeys()
   if (missing.length > 0) {
@@ -50,12 +52,28 @@ function initFirebaseOnce() {
   }
 
   _app = initializeApp(firebaseConfig)
-  _db = getFirestore(_app)
+}
+
+export function getFirebaseApp(): FirebaseApp {
+  initFirebaseOnce()
+  if (_app) return _app
+  throw _initError ?? new Error('Firebase is not configured')
 }
 
 export function getDb(): Firestore {
   initFirebaseOnce()
   if (_db) return _db
+  const app = getFirebaseApp()
+  _db = getFirestore(app)
+  return _db
+}
+
+export function getAuthClient(): Auth {
+  initFirebaseOnce()
+  if (_auth) return _auth
+  const app = getFirebaseApp()
+  _auth = getAuth(app)
+  return _auth
   throw _initError ?? new Error('Firebase is not configured')
 }
 

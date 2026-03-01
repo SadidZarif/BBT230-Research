@@ -95,6 +95,21 @@ npm run build
 npm run preview
 ```
 
+## Google login (restricted access)
+
+This app is restricted to a single Google account:
+
+
+
+### Firebase Console setup
+
+1. Firebase Console → **Authentication** → **Sign-in method**
+   - Enable **Google**
+2. Firebase Console → **Authentication** → **Settings** → **Authorized domains**
+   - Add your GitHub Pages domain (example): `sadidzarif.github.io`
+3. Firebase Console → **Firestore Database** → **Rules**
+   - Paste the rules from `firestore.rules` and publish
+
 ## Export
 
 Use the **Export to CSV** link in the UI to store the data in your local machine.
