@@ -4,7 +4,7 @@ A premium UI web app to log **daily shouting frequency** and compute a **Well‑
 
 ## Permissions
 
-**Copyright (c) 2026 Samia Chowdhury Ridheeka. All rights reserved.**
+**Copyright (c) 2026 S M Sadid Zarif Prinon and Samia Chowdhury Ridheeka. All rights reserved.**
 
 This repository is **not open-source**. You may not copy, modify, redistribute, or reuse this project (including the UI/design) without **prior written permission**.
 
