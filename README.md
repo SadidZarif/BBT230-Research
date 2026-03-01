@@ -97,4 +97,4 @@ npm run preview
 
 ## Export
 
-Use the **Export to CSV** link in the UI. Data is saved in the browser (localStorage).
+Use the **Export to CSV** link in the UI to store the data in your local machine.
