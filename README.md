@@ -2,6 +2,12 @@
 
 A premium UI web app to log **daily shouting frequency** and compute a **Well‑Being Score (0–5)** across a fixed **40‑day study**.
 
+## Permissions
+
+**Copyright (c) 2026 Samia Chowdhury Ridheeka. All rights reserved.**
+
+This repository is **not open-source**. You may not copy, modify, redistribute, or reuse this project (including the UI/design) without **prior written permission**.
+
 ## Study schedule
 
 - **Day 1**: 2026‑02‑20  
