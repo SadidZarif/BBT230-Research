@@ -228,10 +228,6 @@ export default function App() {
           >
             Continue with Google
           </button>
-
-          <p className="mt-3 text-xs text-slate-500">
-            Allowed email: <span className="font-mono text-slate-300">samia.ridheeka.251@northsouth.edu</span>
-          </p>
         </div>
       </div>
     )
