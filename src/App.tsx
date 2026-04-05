@@ -302,7 +302,7 @@ export default function App() {
       <EntryTable rows={rows} onUpdate={updateRecord} onViewScore={(row) => setModalDay(row.dayNumber)} />
 
       <div className="pb-6 px-4 text-slate-500 text-xs font-mono z-10 flex flex-col items-start gap-1 sm:items-center sm:text-center">
-        <span>Data automatically saved locally.</span>
+        <span>Data automatically saved on database.</span>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:justify-center">
           <button
             className="text-primary cursor-pointer hover:underline"
