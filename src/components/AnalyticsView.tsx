@@ -1,6 +1,7 @@
 import ReactECharts from 'echarts-for-react'
 import type { DailyRow } from '../types'
 import { pearsonCorrelation, linearRegression } from '../analytics'
+import { computeLifestylePca } from '../pca'
 import { round2 } from '../scoring'
 
 function fmtShort(iso: string) {
@@ -10,6 +11,12 @@ function fmtShort(iso: string) {
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
+}
+
+function shoutGroupLabel(shoutCount: number) {
+  if (shoutCount <= 3) return 'Low shout'
+  if (shoutCount <= 6) return 'Moderate shout'
+  return 'High shout'
 }
 
 export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
@@ -29,6 +36,7 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
 
   const r = pearsonCorrelation(shoutCounts, wellBeing)
   const { slope, intercept } = linearRegression(shoutCounts, wellBeing)
+  const pca = computeLifestylePca(sorted)
 
   const scatter = sorted.map((d) => [d.shoutCount as number, round2(d.wellBeingScore)])
   const xMin = 0
@@ -37,6 +45,42 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
     [xMin, clamp(slope * xMin + intercept, 0, 5)],
     [xMax, clamp(slope * xMax + intercept, 0, 5)],
   ]
+
+  // PCA is built only from the 5 lifestyle variables.
+  // shoutCount stays outside PCA and is compared against PC1 afterward.
+  const pcaScatter =
+    pca?.points.map((point) => ({
+      value: [point.pc1, point.pc2, point.dayNumber],
+      dateLabel: fmtShort(point.dateISO),
+      shoutCount: point.shoutCount,
+      group: shoutGroupLabel(point.shoutCount),
+    })) ?? []
+  // Group PCA points by shout level so the scatter plot can use clear colors and a legend.
+  const pcaScatterLow = pcaScatter.filter((point) => point.group === 'Low shout')
+  const pcaScatterModerate = pcaScatter.filter((point) => point.group === 'Moderate shout')
+  const pcaScatterHigh = pcaScatter.filter((point) => point.group === 'High shout')
+  const pc1Scores = pca?.points.map((point) => point.pc1) ?? []
+  const shoutVsPc1Scatter =
+    pca?.points.map((point) => ({
+      value: [point.pc1, point.shoutCount, point.dayNumber],
+      dateLabel: fmtShort(point.dateISO),
+    })) ?? []
+  const pc1Range = pc1Scores.length > 0 ? [Math.min(...pc1Scores), Math.max(...pc1Scores)] : [-1, 1]
+  const shoutVsPc1 = linearRegression(pc1Scores, pca?.points.map((point) => point.shoutCount) ?? [])
+  const shoutVsPc1Line = [
+    [pc1Range[0], clamp(shoutVsPc1.slope * pc1Range[0] + shoutVsPc1.intercept, 0, 10)],
+    [pc1Range[1], clamp(shoutVsPc1.slope * pc1Range[1] + shoutVsPc1.intercept, 0, 10)],
+  ]
+  const loadings = pca?.loadings ?? []
+
+  const axisLabelStyle = { color: '#94a3b8' }
+  const splitLineStyle = { lineStyle: { color: 'rgba(148,163,184,0.15)' } }
+  const axisLineStyle = { lineStyle: { color: 'rgba(148,163,184,0.25)' } }
+  const tooltipStyle = {
+    backgroundColor: 'rgba(15,23,42,0.94)',
+    borderColor: 'rgba(99,102,241,0.35)',
+    textStyle: { color: '#e2e8f0' },
+  }
 
   return (
     <section className="w-full max-w-[1600px] px-4 pb-12 z-10">
@@ -51,9 +95,44 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <Kpi label="Pearson r" value={r.toFixed(3)} glowClass="shadow-neon-accent" />
             <Kpi label="Slope" value={slope.toFixed(3)} glowClass="shadow-neon" />
+            <Kpi
+              label="PC1 Variance"
+              value={pca ? `${(pca.explainedVariance.pc1 * 100).toFixed(1)}%` : '--'}
+              glowClass="shadow-[0_0_25px_rgba(16,185,129,0.25)]"
+            />
+            <Kpi
+              label="PC2 Variance"
+              value={pca ? `${(pca.explainedVariance.pc2 * 100).toFixed(1)}%` : '--'}
+              glowClass="shadow-[0_0_25px_rgba(236,72,153,0.22)]"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+          <div className="glass-card rounded-2xl p-4 border border-white/5 xl:col-span-2">
+            <h3 className="text-white font-bold">PCA interpretation</h3>
+            <p className="text-slate-400 text-sm mt-2 leading-6">
+              <span className="text-slate-200 font-semibold">PC1</span> represents the main overall lifestyle /
+              well-being pattern formed from stress, sleep, study, food, and social behavior.{' '}
+              <span className="text-slate-200 font-semibold">PC2</span> represents the secondary variation pattern that
+              captures a different combination of those same lifestyle variables.
+            </p>
+            <p className="text-slate-500 text-xs mt-3 leading-5">
+              Before PCA, stress is reversed so that higher values always mean a better condition, then all five
+              lifestyle variables are converted to z-scores. That way PCA compares them on the same scale.
+            </p>
+          </div>
+
+          <div className="glass-card rounded-2xl p-4 border border-white/5">
+            <h3 className="text-white font-bold mb-3">Explained Variance</h3>
+            <VarianceRow label="PC1" value={pca?.explainedVariance.pc1 ?? 0} colorClass="from-emerald-500 to-cyan-400" />
+            <VarianceRow label="PC2" value={pca?.explainedVariance.pc2 ?? 0} colorClass="from-pink-500 to-purple-400" />
+            <p className="text-slate-500 text-xs mt-4">
+              Higher explained variance means that component captures more of the overall lifestyle pattern.
+            </p>
           </div>
         </div>
 
@@ -68,17 +147,17 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
                 xAxis: {
                   type: 'category',
                   data: labels,
-                  axisLabel: { color: '#94a3b8' },
-                  axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
                 },
                 yAxis: {
                   type: 'value',
                   min: 0,
                   max: 5,
-                  axisLabel: { color: '#94a3b8' },
-                  splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+                  axisLabel: axisLabelStyle,
+                  splitLine: splitLineStyle,
                 },
-                tooltip: { trigger: 'axis' },
+                tooltip: { trigger: 'axis', ...tooltipStyle },
                 series: [
                   {
                     type: 'line',
@@ -105,17 +184,17 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
                 xAxis: {
                   type: 'category',
                   data: labels,
-                  axisLabel: { color: '#94a3b8' },
-                  axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
                 },
                 yAxis: {
                   type: 'value',
                   min: 0,
                   max: 10,
-                  axisLabel: { color: '#94a3b8' },
-                  splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+                  axisLabel: axisLabelStyle,
+                  splitLine: splitLineStyle,
                 },
-                tooltip: { trigger: 'axis' },
+                tooltip: { trigger: 'axis', ...tooltipStyle },
                 series: [
                   {
                     type: 'bar',
@@ -152,19 +231,32 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
                   type: 'value',
                   min: 0,
                   max: 10,
-                  axisLabel: { color: '#94a3b8' },
-                  axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
-                  splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+                  name: 'Shout Count',
+                  nameLocation: 'middle',
+                  nameGap: 32,
+                  nameTextStyle: { color: '#cbd5e1' },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
+                  splitLine: splitLineStyle,
                 },
                 yAxis: {
                   type: 'value',
                   min: 0,
                   max: 5,
-                  axisLabel: { color: '#94a3b8' },
-                  axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
-                  splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+                  name: 'Well-Being Score',
+                  nameLocation: 'middle',
+                  nameGap: 42,
+                  nameTextStyle: { color: '#cbd5e1' },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
+                  splitLine: splitLineStyle,
                 },
-                tooltip: { trigger: 'item' },
+                tooltip: {
+                  trigger: 'item',
+                  ...tooltipStyle,
+                  formatter: (params: { value?: [number, number] }) =>
+                    `Shout Count: ${params.value?.[0] ?? '--'}<br/>Well-Being: ${params.value?.[1] ?? '--'}`,
+                },
                 series: [
                   {
                     name: 'Days',
@@ -179,6 +271,211 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
                     data: regLine,
                     showSymbol: false,
                     lineStyle: { width: 3, color: '#06b6d4' },
+                  },
+                ],
+              }}
+            />
+          </div>
+
+          <div className="glass-card rounded-2xl p-4 border border-white/5">
+            <h3 className="text-white font-bold mb-1">PCA Plot (PC1 vs PC2)</h3>
+            <p className="text-slate-400 text-xs mb-3">
+              Each point is one day after PCA on stress, sleep, study, food, and social variables.
+            </p>
+            <ReactECharts
+              style={{ height: 360 }}
+              option={{
+                backgroundColor: 'transparent',
+                grid: { left: 55, right: 20, top: 30, bottom: 50 },
+                legend: {
+                  top: 0,
+                  textStyle: { color: '#cbd5e1' },
+                  itemWidth: 12,
+                  itemHeight: 12,
+                  data: ['Low shout', 'Moderate shout', 'High shout'],
+                },
+                xAxis: {
+                  type: 'value',
+                  name: 'PC1',
+                  nameLocation: 'middle',
+                  nameGap: 32,
+                  nameTextStyle: { color: '#cbd5e1' },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
+                  splitLine: splitLineStyle,
+                },
+                yAxis: {
+                  type: 'value',
+                  name: 'PC2',
+                  nameLocation: 'middle',
+                  nameGap: 42,
+                  nameTextStyle: { color: '#cbd5e1' },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
+                  splitLine: splitLineStyle,
+                },
+                tooltip: {
+                  trigger: 'item',
+                  ...tooltipStyle,
+                  formatter: (params: { data?: { value?: [number, number, number]; dateLabel?: string; shoutCount?: number } }) =>
+                    `Day ${params.data?.value?.[2] ?? '--'} (${params.data?.dateLabel ?? '--'})<br/>PC1: ${params.data?.value?.[0] ?? '--'}<br/>PC2: ${params.data?.value?.[1] ?? '--'}<br/>Shout Count: ${params.data?.shoutCount ?? '--'}`,
+                },
+                series: [
+                  {
+                    name: 'Low shout',
+                    type: 'scatter',
+                    data: pcaScatterLow,
+                    symbolSize: 12,
+                    itemStyle: {
+                      color: '#22c55e',
+                      shadowBlur: 18,
+                      shadowColor: 'rgba(34,197,94,0.35)',
+                      opacity: 0.95,
+                    },
+                  },
+                  {
+                    name: 'Moderate shout',
+                    type: 'scatter',
+                    data: pcaScatterModerate,
+                    symbolSize: 12,
+                    itemStyle: {
+                      color: '#f59e0b',
+                      shadowBlur: 18,
+                      shadowColor: 'rgba(245,158,11,0.35)',
+                      opacity: 0.95,
+                    },
+                  },
+                  {
+                    name: 'High shout',
+                    type: 'scatter',
+                    data: pcaScatterHigh,
+                    symbolSize: 12,
+                    itemStyle: {
+                      color: '#ef4444',
+                      shadowBlur: 18,
+                      shadowColor: 'rgba(239,68,68,0.35)',
+                      opacity: 0.95,
+                    },
+                  },
+                ],
+              }}
+            />
+          </div>
+
+          <div className="glass-card rounded-2xl p-4 border border-white/5">
+            <h3 className="text-white font-bold mb-1">Shout Count vs PC1</h3>
+            <p className="text-slate-400 text-xs mb-3">
+              This compares the outcome variable (<code className="font-mono">shoutCount</code>) with the main PCA
+              lifestyle pattern (PC1).
+            </p>
+            <ReactECharts
+              style={{ height: 360 }}
+              option={{
+                backgroundColor: 'transparent',
+                grid: { left: 55, right: 20, top: 30, bottom: 50 },
+                xAxis: {
+                  type: 'value',
+                  name: 'PC1',
+                  nameLocation: 'middle',
+                  nameGap: 32,
+                  nameTextStyle: { color: '#cbd5e1' },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
+                  splitLine: splitLineStyle,
+                },
+                yAxis: {
+                  type: 'value',
+                  min: 0,
+                  max: 10,
+                  name: 'Shout Count',
+                  nameLocation: 'middle',
+                  nameGap: 42,
+                  nameTextStyle: { color: '#cbd5e1' },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
+                  splitLine: splitLineStyle,
+                },
+                tooltip: {
+                  trigger: 'item',
+                  ...tooltipStyle,
+                  formatter: (params: { data?: { value?: [number, number, number]; dateLabel?: string } }) =>
+                    `Day ${params.data?.value?.[2] ?? '--'} (${params.data?.dateLabel ?? '--'})<br/>PC1: ${params.data?.value?.[0] ?? '--'}<br/>Shout Count: ${params.data?.value?.[1] ?? '--'}`,
+                },
+                series: [
+                  {
+                    name: 'Days',
+                    type: 'scatter',
+                    data: shoutVsPc1Scatter,
+                    symbolSize: 12,
+                    itemStyle: {
+                      color: '#a855f7',
+                      shadowBlur: 18,
+                      shadowColor: 'rgba(168,85,247,0.35)',
+                    },
+                  },
+                  {
+                    name: 'Trend',
+                    type: 'line',
+                    data: shoutVsPc1Line,
+                    showSymbol: false,
+                    lineStyle: { width: 3, color: '#f472b6' },
+                  },
+                ],
+              }}
+            />
+          </div>
+
+          <div className="glass-card rounded-2xl p-4 border border-white/5 xl:col-span-2">
+            <h3 className="text-white font-bold mb-1">PC1 Loadings and PC2 Loadings</h3>
+            <p className="text-slate-400 text-xs mb-3">
+              These loadings show how strongly each lifestyle variable contributes to PC1 and PC2.
+            </p>
+            <ReactECharts
+              style={{ height: 360 }}
+              option={{
+                backgroundColor: 'transparent',
+                legend: {
+                  top: 0,
+                  textStyle: { color: '#cbd5e1' },
+                },
+                grid: { left: 45, right: 20, top: 40, bottom: 45 },
+                xAxis: {
+                  type: 'category',
+                  data: loadings.map((item) => item.variable),
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
+                },
+                yAxis: {
+                  type: 'value',
+                  min: -1,
+                  max: 1,
+                  name: 'Loading',
+                  nameTextStyle: { color: '#cbd5e1' },
+                  axisLabel: axisLabelStyle,
+                  axisLine: axisLineStyle,
+                  splitLine: splitLineStyle,
+                },
+                tooltip: { trigger: 'axis', ...tooltipStyle },
+                series: [
+                  {
+                    name: 'PC1 Loadings',
+                    type: 'bar',
+                    data: loadings.map((item) => item.pc1),
+                    barMaxWidth: 28,
+                    itemStyle: {
+                      borderRadius: [6, 6, 0, 0],
+                      color: '#10b981',
+                    },
+                  },
+                  {
+                    name: 'PC2 Loadings',
+                    type: 'bar',
+                    data: loadings.map((item) => item.pc2),
+                    barMaxWidth: 28,
+                    itemStyle: {
+                      borderRadius: [6, 6, 0, 0],
+                      color: '#ec4899',
+                    },
                   },
                 ],
               }}
@@ -203,6 +500,29 @@ function Kpi({
     <div className={`px-4 py-3 rounded-2xl bg-slate-900/60 border border-white/10 ${glowClass}`}>
       <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{label}</div>
       <div className="text-lg font-extrabold text-white font-mono">{value}</div>
+    </div>
+  )
+}
+
+function VarianceRow({
+  label,
+  value,
+  colorClass,
+}: {
+  label: string
+  value: number
+  colorClass: string
+}) {
+  const pct = clamp(value * 100, 0, 100)
+  return (
+    <div className="mb-4 last:mb-0">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-semibold text-slate-300">{label}</span>
+        <span className="text-sm font-mono text-white">{pct.toFixed(1)}%</span>
+      </div>
+      <div className="h-3 rounded-full bg-slate-900/70 border border-white/5 overflow-hidden">
+        <div className={`h-full rounded-full bg-gradient-to-r ${colorClass}`} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   )
 }
