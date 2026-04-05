@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import type { DailyRow } from '../types'
 import { pearsonCorrelation, linearRegression } from '../analytics'
@@ -20,6 +21,16 @@ function shoutGroupLabel(shoutCount: number) {
 }
 
 export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)')
+    const sync = () => setIsMobile(media.matches)
+    sync()
+    media.addEventListener('change', sync)
+    return () => media.removeEventListener('change', sync)
+  }, [])
+
   const completed = rows.filter(
     (r) =>
       r.shoutCount != null &&
@@ -81,21 +92,34 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
     borderColor: 'rgba(99,102,241,0.35)',
     textStyle: { color: '#e2e8f0' },
   }
+  const lineChartHeight = isMobile ? 260 : 320
+  const scatterChartHeight = isMobile ? 300 : 360
+  const chartGrid = isMobile
+    ? { left: 34, right: 12, top: 24, bottom: 34 }
+    : { left: 40, right: 20, top: 30, bottom: 40 }
+  const scatterGrid = isMobile
+    ? { left: 42, right: 12, top: 28, bottom: 44 }
+    : { left: 55, right: 20, top: 30, bottom: 50 }
+  const axisNameTextStyle = isMobile ? { color: '#cbd5e1', fontSize: 11 } : { color: '#cbd5e1' }
+  const categoryAxisLabel = isMobile
+    ? { ...axisLabelStyle, fontSize: 10, hideOverlap: true }
+    : axisLabelStyle
+  const valueAxisLabel = isMobile ? { ...axisLabelStyle, fontSize: 10 } : axisLabelStyle
 
   return (
-    <section className="w-full max-w-[1600px] px-4 pb-12 z-10">
-      <div className="glass-panel w-full rounded-3xl p-6 md:p-8 ring-1 ring-white/10 shadow-2xl shadow-black/50">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+    <section className="w-full max-w-[1600px] px-3 sm:px-4 pb-10 md:pb-12 z-10">
+      <div className="glass-panel w-full rounded-[28px] p-4 sm:p-6 md:p-8 ring-1 ring-white/10 shadow-2xl shadow-black/50 overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-5 md:mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
               Analytics
             </h2>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-slate-400 text-sm mt-1 leading-6 max-w-2xl">
               Trend + correlation between shouting and well-being over 40 days.
             </p>
           </div>
 
-          <div className="flex gap-3 flex-wrap">
+          <div className="grid w-full md:w-auto grid-cols-2 md:flex gap-3">
             <Kpi label="Pearson r" value={r.toFixed(3)} glowClass="shadow-neon-accent" />
             <Kpi label="Slope" value={slope.toFixed(3)} glowClass="shadow-neon" />
             <Kpi
@@ -111,8 +135,8 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
-          <div className="glass-card rounded-2xl p-4 border border-white/5 xl:col-span-2">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5 md:mb-6">
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-white/5 xl:col-span-2">
             <h3 className="text-white font-bold">PCA interpretation</h3>
             <p className="text-slate-400 text-sm mt-2 leading-6">
               <span className="text-slate-200 font-semibold">PC1</span> represents the main overall lifestyle /
@@ -126,7 +150,7 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
             </p>
           </div>
 
-          <div className="glass-card rounded-2xl p-4 border border-white/5">
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-white/5">
             <h3 className="text-white font-bold mb-3">Explained Variance</h3>
             <VarianceRow label="PC1" value={pca?.explainedVariance.pc1 ?? 0} colorClass="from-emerald-500 to-cyan-400" />
             <VarianceRow label="PC2" value={pca?.explainedVariance.pc2 ?? 0} colorClass="from-pink-500 to-purple-400" />
@@ -137,24 +161,24 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <div className="glass-card rounded-2xl p-4 border border-white/5">
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-white/5 min-w-0">
             <h3 className="text-white font-bold mb-3">Well-Being Score (0–5)</h3>
             <ReactECharts
-              style={{ height: 320 }}
+              style={{ height: lineChartHeight }}
               option={{
                 backgroundColor: 'transparent',
-                grid: { left: 40, right: 20, top: 30, bottom: 40 },
+                grid: chartGrid,
                 xAxis: {
                   type: 'category',
                   data: labels,
-                  axisLabel: axisLabelStyle,
+                  axisLabel: categoryAxisLabel,
                   axisLine: axisLineStyle,
                 },
                 yAxis: {
                   type: 'value',
                   min: 0,
                   max: 5,
-                  axisLabel: axisLabelStyle,
+                  axisLabel: valueAxisLabel,
                   splitLine: splitLineStyle,
                 },
                 tooltip: { trigger: 'axis', ...tooltipStyle },
@@ -174,24 +198,24 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
             />
           </div>
 
-          <div className="glass-card rounded-2xl p-4 border border-white/5">
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-white/5 min-w-0">
             <h3 className="text-white font-bold mb-3">Shout Count (0–10)</h3>
             <ReactECharts
-              style={{ height: 320 }}
+              style={{ height: lineChartHeight }}
               option={{
                 backgroundColor: 'transparent',
-                grid: { left: 40, right: 20, top: 30, bottom: 40 },
+                grid: chartGrid,
                 xAxis: {
                   type: 'category',
                   data: labels,
-                  axisLabel: axisLabelStyle,
+                  axisLabel: categoryAxisLabel,
                   axisLine: axisLineStyle,
                 },
                 yAxis: {
                   type: 'value',
                   min: 0,
                   max: 10,
-                  axisLabel: axisLabelStyle,
+                  axisLabel: valueAxisLabel,
                   splitLine: splitLineStyle,
                 },
                 tooltip: { trigger: 'axis', ...tooltipStyle },
@@ -220,22 +244,22 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
             />
           </div>
 
-          <div className="glass-card rounded-2xl p-4 border border-white/5 xl:col-span-2">
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-white/5 xl:col-span-2 min-w-0">
             <h3 className="text-white font-bold mb-3">Shout Count vs Well-Being (scatter)</h3>
             <ReactECharts
-              style={{ height: 360 }}
+              style={{ height: scatterChartHeight }}
               option={{
                 backgroundColor: 'transparent',
-                grid: { left: 50, right: 20, top: 30, bottom: 45 },
+                grid: scatterGrid,
                 xAxis: {
                   type: 'value',
                   min: 0,
                   max: 10,
                   name: 'Shout Count',
                   nameLocation: 'middle',
-                  nameGap: 32,
-                  nameTextStyle: { color: '#cbd5e1' },
-                  axisLabel: axisLabelStyle,
+                  nameGap: isMobile ? 26 : 32,
+                  nameTextStyle: axisNameTextStyle,
+                  axisLabel: valueAxisLabel,
                   axisLine: axisLineStyle,
                   splitLine: splitLineStyle,
                 },
@@ -245,9 +269,9 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
                   max: 5,
                   name: 'Well-Being Score',
                   nameLocation: 'middle',
-                  nameGap: 42,
-                  nameTextStyle: { color: '#cbd5e1' },
-                  axisLabel: axisLabelStyle,
+                  nameGap: isMobile ? 32 : 42,
+                  nameTextStyle: axisNameTextStyle,
+                  axisLabel: valueAxisLabel,
                   axisLine: axisLineStyle,
                   splitLine: splitLineStyle,
                 },
@@ -277,30 +301,36 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
             />
           </div>
 
-          <div className="glass-card rounded-2xl p-4 border border-white/5">
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-white/5 min-w-0">
             <h3 className="text-white font-bold mb-1">PCA Plot (PC1 vs PC2)</h3>
             <p className="text-slate-400 text-xs mb-3">
               Each point is one day after PCA on stress, sleep, study, food, and social variables.
             </p>
             <ReactECharts
-              style={{ height: 360 }}
+              style={{ height: scatterChartHeight }}
               option={{
                 backgroundColor: 'transparent',
-                grid: { left: 55, right: 20, top: 30, bottom: 50 },
+                grid: {
+                  left: isMobile ? 40 : 55,
+                  right: isMobile ? 10 : 20,
+                  top: isMobile ? 56 : 30,
+                  bottom: isMobile ? 40 : 50,
+                },
                 legend: {
                   top: 0,
-                  textStyle: { color: '#cbd5e1' },
                   itemWidth: 12,
                   itemHeight: 12,
                   data: ['Low shout', 'Moderate shout', 'High shout'],
+                  itemGap: isMobile ? 10 : 18,
+                  textStyle: isMobile ? { color: '#cbd5e1', fontSize: 10 } : { color: '#cbd5e1' },
                 },
                 xAxis: {
                   type: 'value',
                   name: 'PC1',
                   nameLocation: 'middle',
-                  nameGap: 32,
-                  nameTextStyle: { color: '#cbd5e1' },
-                  axisLabel: axisLabelStyle,
+                  nameGap: isMobile ? 26 : 32,
+                  nameTextStyle: axisNameTextStyle,
+                  axisLabel: valueAxisLabel,
                   axisLine: axisLineStyle,
                   splitLine: splitLineStyle,
                 },
@@ -308,9 +338,9 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
                   type: 'value',
                   name: 'PC2',
                   nameLocation: 'middle',
-                  nameGap: 42,
-                  nameTextStyle: { color: '#cbd5e1' },
-                  axisLabel: axisLabelStyle,
+                  nameGap: isMobile ? 30 : 42,
+                  nameTextStyle: axisNameTextStyle,
+                  axisLabel: valueAxisLabel,
                   axisLine: axisLineStyle,
                   splitLine: splitLineStyle,
                 },
@@ -362,24 +392,24 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
             />
           </div>
 
-          <div className="glass-card rounded-2xl p-4 border border-white/5">
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-white/5 min-w-0">
             <h3 className="text-white font-bold mb-1">Shout Count vs PC1</h3>
             <p className="text-slate-400 text-xs mb-3">
               This compares the outcome variable (<code className="font-mono">shoutCount</code>) with the main PCA
               lifestyle pattern (PC1).
             </p>
             <ReactECharts
-              style={{ height: 360 }}
+              style={{ height: scatterChartHeight }}
               option={{
                 backgroundColor: 'transparent',
-                grid: { left: 55, right: 20, top: 30, bottom: 50 },
+                grid: scatterGrid,
                 xAxis: {
                   type: 'value',
                   name: 'PC1',
                   nameLocation: 'middle',
-                  nameGap: 32,
-                  nameTextStyle: { color: '#cbd5e1' },
-                  axisLabel: axisLabelStyle,
+                  nameGap: isMobile ? 26 : 32,
+                  nameTextStyle: axisNameTextStyle,
+                  axisLabel: valueAxisLabel,
                   axisLine: axisLineStyle,
                   splitLine: splitLineStyle,
                 },
@@ -389,9 +419,9 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
                   max: 10,
                   name: 'Shout Count',
                   nameLocation: 'middle',
-                  nameGap: 42,
-                  nameTextStyle: { color: '#cbd5e1' },
-                  axisLabel: axisLabelStyle,
+                  nameGap: isMobile ? 32 : 42,
+                  nameTextStyle: axisNameTextStyle,
+                  axisLabel: valueAxisLabel,
                   axisLine: axisLineStyle,
                   splitLine: splitLineStyle,
                 },
@@ -425,24 +455,30 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
             />
           </div>
 
-          <div className="glass-card rounded-2xl p-4 border border-white/5 xl:col-span-2">
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-white/5 xl:col-span-2 min-w-0">
             <h3 className="text-white font-bold mb-1">PC1 Loadings and PC2 Loadings</h3>
             <p className="text-slate-400 text-xs mb-3">
               These loadings show how strongly each lifestyle variable contributes to PC1 and PC2.
             </p>
             <ReactECharts
-              style={{ height: 360 }}
+              style={{ height: scatterChartHeight }}
               option={{
                 backgroundColor: 'transparent',
                 legend: {
                   top: 0,
-                  textStyle: { color: '#cbd5e1' },
+                  itemGap: isMobile ? 10 : 18,
+                  textStyle: isMobile ? { color: '#cbd5e1', fontSize: 10 } : { color: '#cbd5e1' },
                 },
-                grid: { left: 45, right: 20, top: 40, bottom: 45 },
+                grid: {
+                  left: isMobile ? 34 : 45,
+                  right: isMobile ? 12 : 20,
+                  top: isMobile ? 54 : 40,
+                  bottom: isMobile ? 34 : 45,
+                },
                 xAxis: {
                   type: 'category',
                   data: loadings.map((item) => item.variable),
-                  axisLabel: axisLabelStyle,
+                  axisLabel: categoryAxisLabel,
                   axisLine: axisLineStyle,
                 },
                 yAxis: {
@@ -450,8 +486,8 @@ export function AnalyticsView({ rows }: { rows: DailyRow[] }) {
                   min: -1,
                   max: 1,
                   name: 'Loading',
-                  nameTextStyle: { color: '#cbd5e1' },
-                  axisLabel: axisLabelStyle,
+                  nameTextStyle: axisNameTextStyle,
+                  axisLabel: valueAxisLabel,
                   axisLine: axisLineStyle,
                   splitLine: splitLineStyle,
                 },
@@ -497,9 +533,9 @@ function Kpi({
   glowClass: string
 }) {
   return (
-    <div className={`px-4 py-3 rounded-2xl bg-slate-900/60 border border-white/10 ${glowClass}`}>
+    <div className={`min-w-0 px-3 sm:px-4 py-3 rounded-2xl bg-slate-900/60 border border-white/10 ${glowClass}`}>
       <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{label}</div>
-      <div className="text-lg font-extrabold text-white font-mono">{value}</div>
+      <div className="text-base sm:text-lg font-extrabold text-white font-mono leading-none mt-1">{value}</div>
     </div>
   )
 }
