@@ -78,6 +78,7 @@ export function EntryTable({
   const completedByDay = new Map<number, boolean>(
     rowsAsc.map((r) => [r.dayNumber, isRowComplete(r)]),
   )
+  const studyLocked = rowsAsc.length > 0 && rowsAsc.every((r) => isRowComplete(r))
 
   const [toast, setToast] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
   const toastTimer = useRef<number | null>(null)
@@ -101,6 +102,7 @@ export function EntryTable({
   }
 
   function canEditDay(dayNumber: number) {
+    if (studyLocked) return false
     if (dayNumber <= 1) return true
     return completedByDay.get(dayNumber - 1) === true
   }
@@ -138,6 +140,8 @@ export function EntryTable({
           {rowsAsc.map((row) => {
             const complete = isRowComplete(row)
             const editable = canEditDay(row.dayNumber)
+            const inputsLocked = !editable && !studyLocked
+            const scoreVisible = complete
             const badge = row.shoutCount == null ? unsetBadge() : levelBadge(row.shoutLevel)
             return (
               <div key={row.dayNumber} className="relative">
@@ -146,10 +150,19 @@ export function EntryTable({
                   className={`hidden md:grid group relative transition-all rounded-xl border p-4 grid-cols-[100px_1fr_1fr_1fr_1fr_1fr_1fr_180px] gap-4 items-center ${
                     editable
                       ? 'bg-slate-800/20 hover:bg-slate-700/30 border-white/5 hover:border-accent/30'
-                      : 'bg-slate-800/10 border-white/5 opacity-70'
+                      : studyLocked
+                        ? 'bg-slate-800/20 border-white/5'
+                        : 'bg-slate-800/10 border-white/5 opacity-70'
                   }`}
                 >
-                  {!editable ? (
+                  {studyLocked ? (
+                    <div
+                      className="absolute inset-0 z-30 rounded-xl cursor-default"
+                      title="Study complete - values are locked"
+                    />
+                  ) : null}
+
+                  {!editable && !studyLocked ? (
                     <div
                       className="absolute inset-0 z-30 rounded-xl cursor-not-allowed"
                       onMouseDown={(e) => {
@@ -176,7 +189,7 @@ export function EntryTable({
                       value={row.shoutCount ?? ''}
                       min={0}
                       max={10}
-                      disabled={!editable}
+                      disabled={inputsLocked}
                       onChange={(e) =>
                         onUpdate(row.dayNumber, {
                           shoutCount: e.target.value === '' ? null : clampInt(Number(e.target.value), 0, 10),
@@ -201,7 +214,7 @@ export function EntryTable({
                       min={1}
                       type="range"
                       value={row.stress ?? 5}
-                      disabled={!editable}
+                      disabled={inputsLocked}
                       onChange={(e) =>
                         onUpdate(row.dayNumber, { stress: clampInt(Number(e.target.value), 1, 10) })
                       }
@@ -220,7 +233,7 @@ export function EntryTable({
                         value={row.sleepHours ?? ''}
                         min={0}
                         max={8}
-                        disabled={!editable}
+                        disabled={inputsLocked}
                         onChange={(e) =>
                           onUpdate(row.dayNumber, {
                             sleepHours: e.target.value === '' ? null : clampNum(Number(e.target.value), 0, 8),
@@ -239,7 +252,7 @@ export function EntryTable({
                         type="number"
                         value={row.studyMinutes ?? ''}
                         min={0}
-                        disabled={!editable}
+                        disabled={inputsLocked}
                         onChange={(e) =>
                           onUpdate(row.dayNumber, {
                             studyMinutes: e.target.value === '' ? null : Math.max(0, Number(e.target.value)),
@@ -257,7 +270,7 @@ export function EntryTable({
                       min={1}
                       type="range"
                       value={row.food ?? 5}
-                      disabled={!editable}
+                      disabled={inputsLocked}
                       onChange={(e) =>
                         onUpdate(row.dayNumber, { food: clampInt(Number(e.target.value), 1, 10) })
                       }
@@ -274,7 +287,7 @@ export function EntryTable({
                       min={1}
                       type="range"
                       value={row.social ?? 5}
-                      disabled={!editable}
+                      disabled={inputsLocked}
                       onChange={(e) =>
                         onUpdate(row.dayNumber, { social: clampInt(Number(e.target.value), 1, 10) })
                       }
@@ -284,28 +297,30 @@ export function EntryTable({
                     </div>
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-end relative z-40">
                     <button
                       onClick={() => onViewScore(row)}
-                      disabled={!complete || !editable}
+                      disabled={!scoreVisible}
                       className={
-                        complete && editable
+                        scoreVisible
                           ? 'btn-3d relative inline-flex items-center justify-center px-4 py-2 overflow-hidden font-bold text-white rounded-lg group bg-gradient-to-br from-primary to-secondary'
                           : 'relative inline-flex items-center justify-center px-4 py-2 overflow-hidden font-bold rounded-lg bg-slate-800/60 text-slate-500 border border-slate-700 cursor-not-allowed'
                       }
                       title={
-                        !editable
+                        studyLocked
+                          ? 'Study complete - values are locked'
+                          : !editable
                           ? `Please complete Day ${row.dayNumber - 1} first`
-                          : complete
+                          : scoreVisible
                             ? 'View Score'
                             : 'Set all values to unlock'
                       }
                     >
-                      {complete ? (
+                      {scoreVisible ? (
                         <span className="absolute w-0 h-0 transition-all duration-500 ease-out bg-white rounded-full group-hover:w-56 group-hover:h-56 opacity-10" />
                       ) : null}
                       <span className="relative text-xs flex items-center gap-2">
-                        {complete && editable ? 'View Score' : 'Locked'}{' '}
+                        {scoreVisible ? 'View Score' : 'Locked'}{' '}
                         <span className="material-symbols-outlined text-[16px]">visibility</span>
                       </span>
                     </button>
@@ -317,10 +332,19 @@ export function EntryTable({
                   className={`md:hidden group relative transition-all rounded-xl border p-4 ${
                     editable
                       ? 'bg-slate-800/20 border-white/5'
-                      : 'bg-slate-800/10 border-white/5 opacity-70'
+                      : studyLocked
+                        ? 'bg-slate-800/20 border-white/5'
+                        : 'bg-slate-800/10 border-white/5 opacity-70'
                   }`}
                 >
-                  {!editable ? (
+                  {studyLocked ? (
+                    <div
+                      className="absolute inset-0 z-30 rounded-xl cursor-default"
+                      title="Study complete - values are locked"
+                    />
+                  ) : null}
+
+                  {!editable && !studyLocked ? (
                     <div
                       className="absolute inset-0 z-30 rounded-xl cursor-not-allowed"
                       onMouseDown={(e) => {
@@ -349,7 +373,7 @@ export function EntryTable({
                         value={row.shoutCount ?? ''}
                         min={0}
                         max={10}
-                        disabled={!editable}
+                        disabled={inputsLocked}
                         onChange={(e) =>
                           onUpdate(row.dayNumber, {
                             shoutCount: e.target.value === '' ? null : clampInt(Number(e.target.value), 0, 10),
@@ -378,7 +402,7 @@ export function EntryTable({
                         min={1}
                         type="range"
                         value={row.stress ?? 5}
-                        disabled={!editable}
+                        disabled={inputsLocked}
                         onChange={(e) =>
                           onUpdate(row.dayNumber, { stress: clampInt(Number(e.target.value), 1, 10) })
                         }
@@ -398,7 +422,7 @@ export function EntryTable({
                             value={row.sleepHours ?? ''}
                             min={0}
                             max={8}
-                            disabled={!editable}
+                            disabled={inputsLocked}
                             onChange={(e) =>
                               onUpdate(row.dayNumber, {
                                 sleepHours: e.target.value === '' ? null : clampNum(Number(e.target.value), 0, 8),
@@ -420,7 +444,7 @@ export function EntryTable({
                             type="number"
                             value={row.studyMinutes ?? ''}
                             min={0}
-                            disabled={!editable}
+                            disabled={inputsLocked}
                             onChange={(e) =>
                               onUpdate(row.dayNumber, {
                                 studyMinutes: e.target.value === '' ? null : Math.max(0, Number(e.target.value)),
@@ -446,7 +470,7 @@ export function EntryTable({
                           min={1}
                           type="range"
                           value={row.food ?? 5}
-                          disabled={!editable}
+                          disabled={inputsLocked}
                           onChange={(e) =>
                             onUpdate(row.dayNumber, { food: clampInt(Number(e.target.value), 1, 10) })
                           }
@@ -466,7 +490,7 @@ export function EntryTable({
                           min={1}
                           type="range"
                           value={row.social ?? 5}
-                          disabled={!editable}
+                          disabled={inputsLocked}
                           onChange={(e) =>
                             onUpdate(row.dayNumber, { social: clampInt(Number(e.target.value), 1, 10) })
                           }
@@ -475,28 +499,30 @@ export function EntryTable({
                     </div>
                   </div>
 
-                  <div className="mt-4 flex justify-end">
+                  <div className="mt-4 flex justify-end relative z-40">
                     <button
                       onClick={() => onViewScore(row)}
-                      disabled={!complete || !editable}
+                      disabled={!scoreVisible}
                       className={
-                        complete && editable
+                        scoreVisible
                           ? 'btn-3d relative inline-flex items-center justify-center w-full px-4 py-3 overflow-hidden font-bold text-white rounded-lg group bg-gradient-to-br from-primary to-secondary'
                           : 'relative inline-flex items-center justify-center w-full px-4 py-3 overflow-hidden font-bold rounded-lg bg-slate-800/60 text-slate-500 border border-slate-700 cursor-not-allowed'
                       }
                       title={
-                        !editable
+                        studyLocked
+                          ? 'Study complete - values are locked'
+                          : !editable
                           ? `Please complete Day ${row.dayNumber - 1} first`
-                          : complete
+                          : scoreVisible
                             ? 'View Score'
                             : 'Set all values to unlock'
                       }
                     >
-                      {complete ? (
+                      {scoreVisible ? (
                         <span className="absolute w-0 h-0 transition-all duration-500 ease-out bg-white rounded-full group-hover:w-56 group-hover:h-56 opacity-10" />
                       ) : null}
                       <span className="relative text-xs flex items-center gap-2">
-                        {complete && editable ? 'View Score' : 'Locked'}{' '}
+                        {scoreVisible ? 'View Score' : 'Locked'}{' '}
                         <span className="material-symbols-outlined text-[16px]">visibility</span>
                       </span>
                     </button>
