@@ -5,13 +5,14 @@ import type { DailyRow } from './types'
 export type PcaVariableName = 'stress' | 'sleep' | 'study' | 'food' | 'social'
 
 // PCA score for one completed day.
-// pc1 and pc2 are the coordinates of that day on the PCA axes.
+// pc1, pc2, and pc3 are the coordinates of that day on the PCA axes.
 export type PcaPoint = {
   dayNumber: number
   dateISO: string
   shoutCount: number
   pc1: number
   pc2: number
+  pc3: number
 }
 
 // Full PCA output returned to the analytics UI.
@@ -24,14 +25,17 @@ export type PcaResult = {
     variable: PcaVariableName
     pc1: number
     pc2: number
+    pc3: number
   }>
   explainedVariance: {
     pc1: number
     pc2: number
+    pc3: number
   }
   eigenvalues: {
     pc1: number
     pc2: number
+    pc3: number
   }
   means: Record<PcaVariableName, number>
   standardDeviations: Record<PcaVariableName, number>
@@ -100,7 +104,7 @@ function normalizeVector(vector: number[]) {
 }
 
 // Outer product v * v^T.
-// This is used in the matrix deflation step when extracting PC2.
+// This is used in the matrix deflation step when extracting later PCs.
 function outerProduct(vector: number[]) {
   return vector.map((a) => vector.map((b) => a * b))
 }
@@ -172,22 +176,28 @@ function powerIterationSymmetric(matrix: number[][], maxIterations = 200) {
   return { eigenvalue, eigenvector: vector }
 }
 
-// Extract the first two principal components.
+// Extract the first N principal components using repeated deflation.
 //
-// Step 1: Find the dominant component (PC1).
-// Step 2: Deflate the matrix to remove PC1's contribution.
-// Step 3: Find the dominant component of the deflated matrix (PC2).
-function extractTopTwoComponents(matrix: number[][]) {
-  const first = powerIterationSymmetric(matrix)
-  const deflated = subtractMatrices(matrix, scaleMatrix(outerProduct(first.eigenvector), first.eigenvalue))
-  let second = powerIterationSymmetric(deflated)
+// Step 1: Find the dominant component of the current matrix.
+// Step 2: Remove that component from the matrix.
+// Step 3: Repeat until we collect the requested number of components.
+function extractTopComponents(matrix: number[][], count: number) {
+  const components: Array<{ eigenvalue: number; eigenvector: number[] }> = []
+  let working = matrix.map((row) => [...row])
 
-  // If the matrix has too little variation, fall back to a simple basis vector.
-  if (vectorLength(second.eigenvector) === 0) {
-    second = { eigenvalue: 0, eigenvector: buildIdentityVector(matrix.length, 1) }
+  for (let i = 0; i < count; i++) {
+    let component = powerIterationSymmetric(working)
+
+    // If the matrix has too little variation, fall back to a simple basis vector.
+    if (vectorLength(component.eigenvector) === 0) {
+      component = { eigenvalue: 0, eigenvector: buildIdentityVector(matrix.length, Math.min(i, matrix.length - 1)) }
+    }
+
+    components.push(component)
+    working = subtractMatrices(working, scaleMatrix(outerProduct(component.eigenvector), component.eigenvalue))
   }
 
-  return { first, second }
+  return components
 }
 
 // Build the correlation matrix from z-score standardized rows.
@@ -245,7 +255,7 @@ function getNumericRows(rows: DailyRow[]): NumericLifestyleRow[] {
 // 2) reverses stress so higher always means better condition,
 // 3) standardizes all 5 lifestyle variables using z-scores,
 // 4) builds the correlation matrix,
-// 5) extracts PC1 and PC2,
+// 5) extracts PC1, PC2, and PC3,
 // 6) computes day-wise PCA scores, loadings, eigenvalues, and explained variance.
 //
 // Important:
@@ -297,24 +307,26 @@ export function computeLifestylePca(rows: DailyRow[]): PcaResult | null {
   )
 
   const correlationMatrix = correlationMatrixFromZScores(zRows)
-  const { first, second } = extractTopTwoComponents(correlationMatrix)
+  const [first, second, third] = extractTopComponents(correlationMatrix, 3)
 
   // Total variance is the trace (diagonal sum) of the correlation matrix.
   // Since this is PCA on standardized variables, total variance is approximately
   // equal to the number of variables (here: 5).
   const totalVariance = correlationMatrix.reduce((sum, row, i) => sum + (row[i] ?? 0), 0) || PCA_VARIABLES.length
 
-  // These loadings show how strongly each variable contributes to PC1 and PC2.
+  // These loadings show how strongly each variable contributes to PC1, PC2, and PC3.
   // For standardized PCA, loading = eigenvector * sqrt(eigenvalue).
   const loadings = PCA_VARIABLES.map((variable, index) => ({
     variable,
     pc1: round4((first.eigenvector[index] ?? 0) * Math.sqrt(first.eigenvalue)),
     pc2: round4((second.eigenvector[index] ?? 0) * Math.sqrt(second.eigenvalue)),
+    pc3: round4((third.eigenvector[index] ?? 0) * Math.sqrt(third.eigenvalue)),
   }))
 
   // PC scores place each day onto the PCA axes.
   // PC1 = the main combined lifestyle pattern
   // PC2 = the secondary lifestyle pattern
+  // PC3 = the third major variation pattern after PC1 and PC2
   const points = transformedRows.map((row, index) => {
     const z = zRows[index] ?? []
     return {
@@ -323,6 +335,7 @@ export function computeLifestylePca(rows: DailyRow[]): PcaResult | null {
       shoutCount: row.shoutCount,
       pc1: round4(dot(z, first.eigenvector)),
       pc2: round4(dot(z, second.eigenvector)),
+      pc3: round4(dot(z, third.eigenvector)),
     }
   })
 
@@ -334,10 +347,12 @@ export function computeLifestylePca(rows: DailyRow[]): PcaResult | null {
     explainedVariance: {
       pc1: clamp01(first.eigenvalue / totalVariance),
       pc2: clamp01(second.eigenvalue / totalVariance),
+      pc3: clamp01(third.eigenvalue / totalVariance),
     },
     eigenvalues: {
       pc1: round4(first.eigenvalue),
       pc2: round4(second.eigenvalue),
+      pc3: round4(third.eigenvalue),
     },
     means,
     standardDeviations,

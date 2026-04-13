@@ -40,6 +40,7 @@ export function generateDefaultRecords(days = STUDY_DAYS, startDate = new Date()
       studyMinutes: null,
       food: null,
       social: null,
+      lowScoreNotes: '',
     })
   }
   return rows
@@ -76,6 +77,7 @@ export function normalizeRecordsToStudySchedule(input: DailyRecord[] | null): Da
       studyMinutes: numOrNull(existing?.studyMinutes),
       food: numOrNull(existing?.food),
       social: numOrNull(existing?.social),
+      lowScoreNotes: typeof existing?.lowScoreNotes === 'string' ? existing.lowScoreNotes : '',
     })
   }
   return out

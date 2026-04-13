@@ -11,6 +11,7 @@ export type DailyRecord = {
   studyMinutes: number | null // 0..∞
   food: number | null // 1..10
   social: number | null // 1..10
+  lowScoreNotes?: string // free-text notes for days with well-being ≤ 3
 }
 
 export type DailyScores = {

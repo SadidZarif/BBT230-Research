@@ -1,5 +1,5 @@
 <!doctype html>
-<html class="dark" lang="en">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
@@ -13,9 +13,12 @@
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function(){try{var t=localStorage.getItem('bbt230-theme');if(t==='light')return;document.documentElement.classList.add('dark')}catch(e){document.documentElement.classList.add('dark')}})();
+    </script>
   </head>
   <body
-    class="bg-background-dark text-slate-100 font-display min-h-screen flex flex-col items-center relative overflow-x-hidden selection:bg-accent selection:text-white"
+    class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen flex flex-col items-center relative overflow-x-hidden selection:bg-accent selection:text-white"
   >
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
