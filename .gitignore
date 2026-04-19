@@ -23,6 +23,9 @@ lerna-debug.log*
 *.sln
 *.sw?
 
+# Output CSV file
+bbt230-researchh.csv
+
 # Cursor / local tooling
 .cursor/
 
