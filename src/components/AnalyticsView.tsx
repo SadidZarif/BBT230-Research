@@ -172,6 +172,14 @@ function maxValue(xs: number[]) {
   return xs.length > 0 ? Math.max(...xs) : 0
 }
 
+function consecutiveDiffs(xs: number[]) {
+  const out: number[] = []
+  for (let i = 1; i < xs.length; i++) {
+    out.push(xs[i]! - xs[i - 1]!)
+  }
+  return out
+}
+
 function formatNumber(value: number, digits = 2) {
   return Number.isFinite(value) ? value.toFixed(digits) : '--'
 }
@@ -1353,6 +1361,13 @@ export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light
     const dayIndex = sorted.map((_, index) => index + 1)
     const timeTrend = linearRegression(dayIndex, wellBeing).slope
     const lowScoreDays = sorted.filter((row) => row.wellBeingScore <= 3).length
+    const wellBeingDiffs = consecutiveDiffs(wellBeing)
+    const absWellBeingDiffs = wellBeingDiffs.map((diff) => Math.abs(diff))
+    const avgAbsWellBeingDiff = meanValue(absWellBeingDiffs)
+    const maxAbsWellBeingDiff = maxValue(absWellBeingDiffs)
+    const riseTransitions = wellBeingDiffs.filter((diff) => diff > 0).length
+    const fallTransitions = wellBeingDiffs.filter((diff) => diff < 0).length
+    const largeStepChanges = absWellBeingDiffs.filter((diff) => diff >= 0.75).length
     const factorAverages = [
       { label: 'stress regulation', value: meanValue(sorted.map((row) => row.stressScore)) },
       { label: 'sleep support', value: meanValue(sorted.map((row) => row.sleepScore)) },
@@ -1392,17 +1407,18 @@ export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light
       subtitle: 'Day-wise variation in the combined well-being score.',
       option: wellBeingOption,
       accentClass: 'from-cyan-500 to-blue-500',
-      summary: `The well-being line is ${trendDescription(timeTrend)}. It is not a simple gradual rise or gradual fall, because the total score is being recalculated every day from stress, sleep, study, food, and social interaction together.`,
+      summary: `The well-being line is ${trendDescription(timeTrend)}, but it is not jumping randomly from one extreme to another. The score mostly rises and falls in a gradual way, which suggests multiple confounding factors are working together rather than one single sudden cause dominating the pattern.`,
       bullets: [
-        `The score ranges from ${formatNumber(minValue(wellBeing))} to ${formatNumber(maxValue(wellBeing))}, which shows noticeable day-to-day fluctuation instead of one flat pattern.`,
-        `Among the five contributing variables, the strongest average support comes from ${strongestFactor?.label ?? 'the strongest factor'}, while the weakest average support comes from ${weakestFactor?.label ?? 'the weakest factor'}. That imbalance helps explain why some days drop much lower than others.`,
-        `${lowScoreDays} days fall into the ${scoreBandLabel(3)} band at or below 3.00, so lower-score days exist repeatedly but they are not the full story of the study.`,
+        `Across consecutive days, the average absolute score change is only ${formatNumber(avgAbsWellBeingDiff)}, while the full score range runs from ${formatNumber(minValue(wellBeing))} to ${formatNumber(maxValue(wellBeing))}. That supports a gradual rise-and-fall pattern more than abrupt one-day shocks.`,
+        `There are ${riseTransitions} rising transitions and ${fallTransitions} falling transitions, which means the line is moving in both directions over time instead of drifting only upward or only downward. Only ${largeStepChanges} transitions are at or above 0.75 points, so larger jumps are limited rather than constant.`,
+        `Because the total score is built from five variables, confounding factors are naturally involved. Among them, the strongest average support comes from ${strongestFactor?.label ?? 'the strongest factor'}, while the weakest average support comes from ${weakestFactor?.label ?? 'the weakest factor'}. This imbalance helps explain why the curve changes gradually as different lifestyle dimensions combine on each day.`,
+        `${lowScoreDays} days fall into the ${scoreBandLabel(3)} band at or below 3.00, but those lower-score days are spread within a broader wave-like pattern rather than appearing as isolated random collapses.`,
       ],
       stats: [
         { label: 'Average Score', value: formatNumber(meanValue(wellBeing)) },
         { label: 'Std. Dev.', value: formatNumber(sampleStd(wellBeing)) },
-        { label: 'Minimum', value: formatNumber(minValue(wellBeing)) },
-        { label: 'Maximum', value: formatNumber(maxValue(wellBeing)) },
+        { label: 'Avg. Day Change', value: formatNumber(avgAbsWellBeingDiff) },
+        { label: 'Largest Day Change', value: formatNumber(maxAbsWellBeingDiff) },
       ],
     }
 
