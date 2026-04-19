@@ -1,5 +1,6 @@
 import {
   GoogleAuthProvider,
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
   signInWithRedirect,
@@ -19,6 +20,11 @@ export function isAllowedEmail(email: string | null | undefined) {
 export function subscribeAuth(onUser: (user: User | null) => void): Unsubscribe {
   const auth = getAuthClient()
   return onAuthStateChanged(auth, onUser)
+}
+
+export async function resolveRedirectSignIn() {
+  const auth = getAuthClient()
+  return getRedirectResult(auth)
 }
 
 export async function loginWithGoogle() {

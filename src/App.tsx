@@ -7,7 +7,7 @@ import { WellBeingModal } from './components/WellBeingModal'
 import { AnalyticsView } from './components/AnalyticsView.tsx'
 import { ensureSeededDays, subscribeDays, updateDay } from './firestoreDays'
 import { getFirebaseInitErrorMessage } from './firebase'
-import { isAllowedEmail, loginWithGoogle, logout, subscribeAuth } from './auth'
+import { isAllowedEmail, loginWithGoogle, logout, resolveRedirectSignIn, subscribeAuth } from './auth'
 import { useTheme } from './useTheme'
 import type { User } from 'firebase/auth'
 
@@ -82,6 +82,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [authActionError, setAuthActionError] = useState<string | null>(null)
+  const [authInitNotice, setAuthInitNotice] = useState<string | null>(null)
 
   const rows: DailyRow[] = useMemo(() => {
     return records.map((r) => ({ ...r, ...computeDailyScores(r) }))
@@ -94,11 +95,37 @@ export default function App() {
   }, [records])
 
   useEffect(() => {
-    const unsub = subscribeAuth((u) => {
-      setUser(u)
+    let unsub: (() => void) | null = null
+    const timeoutId = window.setTimeout(() => {
       setAuthReady(true)
-    })
-    return () => unsub()
+      setAuthInitNotice('Sign-in check took too long on this device. You can still continue with Google below.')
+    }, 4000)
+
+    try {
+      resolveRedirectSignIn().catch(() => {
+        // Redirect completion errors should not trap the user on the loading screen.
+      })
+
+      unsub = subscribeAuth((u) => {
+        window.clearTimeout(timeoutId)
+        setUser(u)
+        setAuthReady(true)
+        setAuthInitNotice(null)
+      })
+    } catch (e) {
+      window.clearTimeout(timeoutId)
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: unknown }).message)
+          : 'Unable to initialize authentication'
+      setAuthActionError(msg)
+      setAuthReady(true)
+    }
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      if (unsub) unsub()
+    }
   }, [])
 
   const allowed = useMemo(() => isAllowedEmail(user?.email), [user?.email])
@@ -232,10 +259,17 @@ export default function App() {
             </div>
           ) : null}
 
+          {authInitNotice ? (
+            <div className="mt-4 text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-500/20 rounded-xl p-3">
+              {authInitNotice}
+            </div>
+          ) : null}
+
           <button
             className="btn-3d mt-6 w-full py-3 rounded-xl font-bold tracking-wide text-white bg-gradient-to-r from-primary to-secondary"
             onClick={async () => {
               setAuthActionError(null)
+              setAuthInitNotice(null)
               try {
                 await loginWithGoogle()
               } catch (e) {
