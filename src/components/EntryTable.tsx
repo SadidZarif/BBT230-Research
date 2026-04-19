@@ -69,10 +69,12 @@ export function EntryTable({
   rows,
   onUpdate,
   onViewScore,
+  readOnly = false,
 }: {
   rows: DailyRow[]
   onUpdate: (dayNumber: number, patch: Partial<DailyRecord>) => void
   onViewScore: (row: DailyRow) => void
+  readOnly?: boolean
 }) {
   const rowsAsc = [...rows].sort((a, b) => a.dayNumber - b.dayNumber)
   const completedByDay = new Map<number, boolean>(
@@ -90,6 +92,12 @@ export function EntryTable({
   }, [])
 
   function showBlockedToast(dayNumber: number) {
+    if (readOnly) {
+      setToast({ open: true, message: 'View-only access: this account cannot change study data.' })
+      if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
+      toastTimer.current = window.setTimeout(() => setToast({ open: false, message: '' }), 2200)
+      return
+    }
     const prev = getPrevDay(dayNumber)
     const msg =
       dayNumber <= 1
@@ -102,6 +110,7 @@ export function EntryTable({
   }
 
   function canEditDay(dayNumber: number) {
+    if (readOnly) return false
     if (studyLocked) return false
     if (dayNumber <= 1) return true
     return completedByDay.get(dayNumber - 1) === true
@@ -140,10 +149,18 @@ export function EntryTable({
         </div>
 
         <div className="md:overflow-y-auto md:flex-1 p-2 space-y-2 relative" id="table-body">
+          {readOnly ? (
+            <div className="px-3 pt-2">
+              <div className="rounded-2xl border border-amber-300/50 bg-amber-100/70 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+                This account has view-only access. Data and notes are locked for professors.
+              </div>
+            </div>
+          ) : null}
+
           {rowsAsc.map((row) => {
             const complete = isRowComplete(row)
             const editable = canEditDay(row.dayNumber)
-            const inputsLocked = !editable && !studyLocked
+            const inputsLocked = readOnly || (!editable && !studyLocked)
             const scoreVisible = complete
             const isLowScore = complete && row.wellBeingScore <= 3
             const badge = row.shoutCount == null ? unsetBadge() : levelBadge(row.shoutLevel)
@@ -177,7 +194,7 @@ export function EntryTable({
                         e.preventDefault()
                         showBlockedToast(row.dayNumber)
                       }}
-                      title={`Please complete Day ${row.dayNumber - 1} first`}
+                      title={readOnly ? 'View-only access' : `Please complete Day ${row.dayNumber - 1} first`}
                     />
                   ) : null}
 
@@ -313,7 +330,9 @@ export function EntryTable({
                           : 'relative inline-flex items-center justify-center px-4 py-2 overflow-hidden font-bold rounded-lg bg-slate-200/60 dark:bg-slate-800/60 text-slate-500 border border-slate-300 dark:border-slate-700 cursor-not-allowed'
                       }
                       title={
-                        studyLocked
+                        readOnly
+                          ? 'View-only account'
+                          : studyLocked
                           ? 'Study complete - values are locked'
                           : !editable
                           ? `Please complete Day ${row.dayNumber - 1} first`
@@ -364,7 +383,7 @@ export function EntryTable({
                         e.preventDefault()
                         showBlockedToast(row.dayNumber)
                       }}
-                      title={`Please complete Day ${row.dayNumber - 1} first`}
+                      title={readOnly ? 'View-only access' : `Please complete Day ${row.dayNumber - 1} first`}
                     />
                   ) : null}
 
@@ -520,7 +539,9 @@ export function EntryTable({
                           : 'relative inline-flex items-center justify-center w-full px-4 py-3 overflow-hidden font-bold rounded-lg bg-slate-200/60 dark:bg-slate-800/60 text-slate-500 border border-slate-300 dark:border-slate-700 cursor-not-allowed'
                       }
                       title={
-                        studyLocked
+                        readOnly
+                          ? 'View-only account'
+                          : studyLocked
                           ? 'Study complete - values are locked'
                           : !editable
                           ? `Please complete Day ${row.dayNumber - 1} first`

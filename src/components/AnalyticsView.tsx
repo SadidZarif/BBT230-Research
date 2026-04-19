@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import ReactECharts from 'echarts-for-react'
 import type { DailyRow } from '../types'
 import { pearsonCorrelation, linearRegression } from '../analytics'
 import { computeLifestylePca } from '../pca'
 import { round2 } from '../scoring'
-import { subscribeAnalysisNotes, updateAnalysisNote } from '../analysisNotes.ts'
 
 type PairMetricKey = 'stress' | 'sleepHours' | 'studyMinutes' | 'food' | 'social'
 
@@ -279,30 +278,6 @@ function pairGroupOverlap(points: PairScatterPoint[], groupA: string, groupB: st
   )
 }
 
-const ANALYSIS_NOTES_STORAGE_KEY = 'bbt230.analysis-graph-notes.v1'
-
-function loadAnalysisNotesLocal() {
-  try {
-    const raw = localStorage.getItem(ANALYSIS_NOTES_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== 'object') return {}
-    return Object.fromEntries(
-      Object.entries(parsed as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-    )
-  } catch {
-    return {}
-  }
-}
-
-function saveAnalysisNotesLocal(notes: Record<string, string>) {
-  try {
-    localStorage.setItem(ANALYSIS_NOTES_STORAGE_KEY, JSON.stringify(notes))
-  } catch {
-    // Ignore local cache failures and rely on in-memory state.
-  }
-}
-
 function AnalysisButton({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -350,54 +325,12 @@ function AnalyticsInsightModal({
   open,
   onClose,
   isMobile,
-  editableNote,
-  savedNote,
-  isSavingNote,
-  onSaveNote,
 }: {
   insight: ChartInsight | null
   open: boolean
   onClose: () => void
   isMobile: boolean
-  editableNote: boolean
-  savedNote: string
-  isSavingNote: boolean
-  onSaveNote: (chartId: string, note: string) => void
 }) {
-  const [noteText, setNoteText] = useState('')
-  const saveTimer = useRef<number | null>(null)
-
-  useEffect(() => {
-    if (open && insight?.id && editableNote) {
-      setNoteText(savedNote)
-    }
-    if (!open || !editableNote) {
-      setNoteText('')
-    }
-  }, [open, insight?.id, editableNote, savedNote])
-
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current != null) window.clearTimeout(saveTimer.current)
-    }
-  }, [])
-
-  const hasUnsavedNote = editableNote && noteText !== savedNote
-
-  function queueSave(nextValue: string) {
-    if (!editableNote || !insight) return
-    if (saveTimer.current != null) window.clearTimeout(saveTimer.current)
-    saveTimer.current = window.setTimeout(() => {
-      onSaveNote(insight.id, nextValue)
-    }, 800)
-  }
-
-  function flushNoteSave() {
-    if (!editableNote || !insight) return
-    if (saveTimer.current != null) window.clearTimeout(saveTimer.current)
-    onSaveNote(insight.id, noteText)
-  }
-
   return (
     <AnimatePresence>
       {open && insight ? (
@@ -441,52 +374,6 @@ function AnalyticsInsightModal({
                 <div className="rounded-3xl border border-slate-200/60 dark:border-white/5 bg-white/50 dark:bg-slate-950/10 p-3 sm:p-4">
                   <ReactECharts style={{ height: isMobile ? 320 : 500 }} option={insight.option} />
                 </div>
-
-                {editableNote ? (
-                  <div className="mt-4 rounded-3xl border border-slate-200/60 dark:border-white/5 bg-white/60 dark:bg-slate-950/15 p-4 sm:p-5">
-                    <div className="mb-3 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-primary">sticky_note_2</span>
-                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                        Note
-                      </h3>
-                    </div>
-                    <textarea
-                      className="w-full rounded-2xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-slate-900/70 p-4 text-sm leading-6 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none resize-none h-[112px] focus:border-primary/40"
-                      placeholder="Write your own note about this graph..."
-                      value={noteText}
-                      onChange={(e) => {
-                        const nextValue = e.target.value
-                        setNoteText(nextValue)
-                        queueSave(nextValue)
-                      }}
-                      onBlur={flushNoteSave}
-                    />
-                    <div className="mt-3 flex min-h-[34px] flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="text-[11px] text-slate-500">
-                        Notes auto-save to your database while you type.
-                      </span>
-                      <span
-                        className={`inline-flex min-w-[92px] items-center justify-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                          hasUnsavedNote || isSavingNote
-                            ? 'border-amber-400/20 bg-amber-500/10 text-amber-600 dark:text-amber-300'
-                            : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-                        }`}
-                      >
-                        {hasUnsavedNote || isSavingNote ? (
-                          <>
-                            <span className="material-symbols-outlined mr-1 animate-spin text-[13px]">progress_activity</span>
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined mr-1 text-[13px]">check_circle</span>
-                            Saved
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
               </div>
 
               <div className="w-full xl:w-[38%] p-4 sm:p-6 lg:p-7">
@@ -552,8 +439,6 @@ function AnalyticsInsightModal({
 export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light' | 'dark' }) {
   const [isMobile, setIsMobile] = useState(false)
   const [activeInsight, setActiveInsight] = useState<ChartInsight | null>(null)
-  const [analysisNotes, setAnalysisNotes] = useState<Record<string, string>>(() => loadAnalysisNotesLocal())
-  const [savingNoteId, setSavingNoteId] = useState<string | null>(null)
   const isDark = theme === 'dark'
 
   useEffect(() => {
@@ -563,30 +448,6 @@ export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light
     media.addEventListener('change', sync)
     return () => media.removeEventListener('change', sync)
   }, [])
-
-  useEffect(() => {
-    saveAnalysisNotesLocal(analysisNotes)
-  }, [analysisNotes])
-
-  useEffect(() => {
-    const unsub = subscribeAnalysisNotes((notes: Record<string, string>) => {
-      setAnalysisNotes(notes)
-      saveAnalysisNotesLocal(notes)
-    })
-    return () => unsub()
-  }, [])
-
-  function saveAnalysisNote(chartId: string, note: string) {
-    setAnalysisNotes((prev) => ({ ...prev, [chartId]: note }))
-    setSavingNoteId(chartId)
-    updateAnalysisNote(chartId, note)
-      .catch(() => {
-        // Keep the local value visible; the Firestore snapshot will reconcile on success.
-      })
-      .finally(() => {
-        setSavingNoteId((current) => (current === chartId ? null : current))
-      })
-  }
 
   const completed = rows.filter(
     (r) =>
@@ -1351,12 +1212,6 @@ export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light
     }
   })
 
-  const noteEnabledChartIds = new Set<string>([
-    'well-being-line',
-    'shout-vs-wellbeing',
-    ...pairCharts.map((chart) => chart.key),
-  ])
-
   const insights = useMemo(() => {
     const dayIndex = sorted.map((_, index) => index + 1)
     const timeTrend = linearRegression(dayIndex, wellBeing).slope
@@ -1784,10 +1639,6 @@ export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light
         open={activeInsight != null}
         onClose={() => setActiveInsight(null)}
         isMobile={isMobile}
-        editableNote={activeInsight != null && noteEnabledChartIds.has(activeInsight.id)}
-        savedNote={activeInsight ? analysisNotes[activeInsight.id] ?? '' : ''}
-        isSavingNote={activeInsight != null && savingNoteId === activeInsight.id}
-        onSaveNote={saveAnalysisNote}
       />
     </>
   )

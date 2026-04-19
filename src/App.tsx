@@ -7,7 +7,17 @@ import { WellBeingModal } from './components/WellBeingModal'
 import { AnalyticsView } from './components/AnalyticsView.tsx'
 import { ensureSeededDays, subscribeDays, updateDay } from './firestoreDays'
 import { getFirebaseInitErrorMessage } from './firebase'
-import { isAllowedEmail, loginWithGoogle, logout, resolveRedirectSignIn, subscribeAuth } from './auth'
+import {
+  EDITOR_EMAILS,
+  VIEWER_EMAILS,
+  canEditEmail,
+  getAccessRole,
+  isAllowedEmail,
+  loginWithGoogle,
+  logout,
+  resolveRedirectSignIn,
+  subscribeAuth,
+} from './auth'
 import { useTheme } from './useTheme'
 import type { User } from 'firebase/auth'
 
@@ -83,6 +93,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [authActionError, setAuthActionError] = useState<string | null>(null)
   const [authInitNotice, setAuthInitNotice] = useState<string | null>(null)
+  const authorizedEmails = [...EDITOR_EMAILS, ...VIEWER_EMAILS]
 
   const rows: DailyRow[] = useMemo(() => {
     return records.map((r) => ({ ...r, ...computeDailyScores(r) }))
@@ -96,17 +107,34 @@ export default function App() {
 
   useEffect(() => {
     let unsub: (() => void) | null = null
+    let active = true
     const timeoutId = window.setTimeout(() => {
+      if (!active) {
+        return
+      }
       setAuthReady(true)
       setAuthInitNotice('Sign-in check took too long on this device. You can still continue with Google below.')
     }, 4000)
 
     try {
-      resolveRedirectSignIn().catch(() => {
-        // Redirect completion errors should not trap the user on the loading screen.
-      })
+      resolveRedirectSignIn()
+        .then((result) => {
+          if (!active || !result?.user) {
+            return
+          }
+          window.clearTimeout(timeoutId)
+          setUser(result.user)
+          setAuthReady(true)
+          setAuthInitNotice(null)
+        })
+        .catch(() => {
+          // Redirect completion errors should not trap the user on the loading screen.
+        })
 
       unsub = subscribeAuth((u) => {
+        if (!active) {
+          return
+        }
         window.clearTimeout(timeoutId)
         setUser(u)
         setAuthReady(true)
@@ -123,12 +151,15 @@ export default function App() {
     }
 
     return () => {
+      active = false
       window.clearTimeout(timeoutId)
       if (unsub) unsub()
     }
   }, [])
 
+  const accessRole = useMemo(() => getAccessRole(user?.email), [user?.email])
   const allowed = useMemo(() => isAllowedEmail(user?.email), [user?.email])
+  const canEdit = useMemo(() => canEditEmail(user?.email), [user?.email])
 
   useEffect(() => {
     let unsub: (() => void) | null = null
@@ -153,11 +184,13 @@ export default function App() {
           },
         )
 
-        ensureSeededDays().catch((e) => {
-          const msg =
-            e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : 'Seed failed'
-          setSync((s) => (s.mode === 'cloud' ? s : { mode: 'error', message: msg }))
-        })
+        if (canEdit) {
+          ensureSeededDays().catch((e) => {
+            const msg =
+              e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : 'Seed failed'
+            setSync((s) => (s.mode === 'cloud' ? s : { mode: 'error', message: msg }))
+          })
+        }
       } catch (e) {
         const msg =
           e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : 'Cloud sync unavailable'
@@ -167,9 +200,12 @@ export default function App() {
     return () => {
       if (unsub) unsub()
     }
-  }, [authReady, allowed])
+  }, [authReady, allowed, canEdit])
 
   function updateRecord(dayNumber: number, patch: Partial<DailyRecord>) {
+    if (!canEdit) {
+      return
+    }
     setRecords((prev) => prev.map((r) => (r.dayNumber === dayNumber ? { ...r, ...patch } : r)))
     if (allowed) {
       updateDay(dayNumber, patch).catch((e) => {
@@ -271,7 +307,11 @@ export default function App() {
               setAuthActionError(null)
               setAuthInitNotice(null)
               try {
-                await loginWithGoogle()
+                const result = await loginWithGoogle()
+                if (result?.user) {
+                  setUser(result.user)
+                  setAuthReady(true)
+                }
               } catch (e) {
                 const msg =
                   e && typeof e === 'object' && 'message' in e
@@ -298,9 +338,13 @@ export default function App() {
           <h2 className="text-2xl font-black text-slate-900 dark:text-white">Access denied</h2>
           <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">
             You are signed in as <span className="font-mono text-slate-700 dark:text-slate-200">{user.email ?? 'unknown'}</span>, but this
-            app is restricted to:
+            app is restricted to these accounts:
           </p>
-          <div className="mt-3 font-mono text-sm text-accent">samia.ridheeka.251@northsouth.edu</div>
+          <div className="mt-3 space-y-1 font-mono text-sm text-accent">
+            {authorizedEmails.map((email) => (
+              <div key={email}>{email}</div>
+            ))}
+          </div>
           <button
             className="btn-3d mt-6 w-full py-3 rounded-xl font-bold tracking-wide text-white bg-gradient-to-r from-primary to-secondary"
             onClick={async () => {
@@ -339,6 +383,19 @@ export default function App() {
           </button>
         </div>
 
+        <div
+          className={`mt-3 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-wider ${
+            canEdit
+              ? 'border-emerald-300/60 bg-emerald-100/80 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'
+              : 'border-amber-300/60 bg-amber-100/80 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">
+            {canEdit ? 'edit_square' : 'visibility'}
+          </span>
+          {canEdit ? 'Editor Access' : 'Viewer Access'}
+        </div>
+
         <div className="mt-4 flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/60 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 backdrop-blur-sm">
           <span className="relative flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
@@ -351,7 +408,9 @@ export default function App() {
 
         <div className="mt-3 text-xs font-mono text-slate-500 dark:text-slate-400 px-4 break-words">
           {sync.mode === 'cloud' ? (
-            <span className="text-green-600 dark:text-green-300">Cloud Sync: Connected</span>
+            <span className="text-green-600 dark:text-green-300">
+              Cloud Sync: Connected{accessRole === 'viewer' ? ' (view only)' : ''}
+            </span>
           ) : sync.mode === 'error' ? (
             <span className="text-red-600 dark:text-red-300">Cloud Sync: Error — {sync.message ?? 'unknown'}</span>
           ) : (
@@ -360,7 +419,7 @@ export default function App() {
         </div>
       </header>
 
-      <EntryTable rows={rows} onUpdate={updateRecord} onViewScore={(row) => setModalDay(row.dayNumber)} />
+      <EntryTable rows={rows} onUpdate={updateRecord} onViewScore={(row) => setModalDay(row.dayNumber)} readOnly={!canEdit} />
 
       <div className="pb-6 px-4 text-slate-500 text-xs font-mono z-10 flex flex-col items-start gap-1 sm:items-center sm:text-center">
         <span>Data automatically saved on database.</span>
@@ -380,7 +439,14 @@ export default function App() {
 
       {analyticsOpen ? <AnalyticsView rows={rows} theme={theme} /> : null}
 
-      <WellBeingModal open={modalDay != null} row={modalRow} onClose={() => setModalDay(null)} onUpdate={updateRecord} theme={theme} />
+      <WellBeingModal
+        open={modalDay != null}
+        row={modalRow}
+        onClose={() => setModalDay(null)}
+        onUpdate={updateRecord}
+        canEditNotes={canEdit}
+        theme={theme}
+      />
     </div>
   )
 }

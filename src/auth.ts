@@ -7,10 +7,14 @@ import {
   signOut,
   type Unsubscribe,
   type User,
+  type UserCredential,
 } from 'firebase/auth'
 import { getAuthClient } from './firebase'
 
-export const ALLOWED_EMAIL = 'samia.ridheeka.251@northsouth.edu'
+export const EDITOR_EMAILS = ['samia.ridheeka.251@northsouth.edu'] as const
+export const VIEWER_EMAILS = ['muntasir.ali@northsouth.edu', 'unknownflexx@gmail.com'] as const
+
+export type AccessRole = 'editor' | 'viewer' | 'none'
 
 function isMobileBrowser() {
   if (typeof navigator === 'undefined') return false
@@ -22,9 +26,24 @@ function isLikelyInAppBrowser() {
   return /FBAN|FBAV|Instagram|Line|MicroMessenger|Messenger/i.test(navigator.userAgent)
 }
 
+function normalizeEmail(email: string | null | undefined) {
+  return email?.trim().toLowerCase() ?? ''
+}
+
+export function getAccessRole(email: string | null | undefined): AccessRole {
+  const normalized = normalizeEmail(email)
+  if (!normalized) return 'none'
+  if (EDITOR_EMAILS.includes(normalized as (typeof EDITOR_EMAILS)[number])) return 'editor'
+  if (VIEWER_EMAILS.includes(normalized as (typeof VIEWER_EMAILS)[number])) return 'viewer'
+  return 'none'
+}
+
 export function isAllowedEmail(email: string | null | undefined) {
-  if (!email) return false
-  return email.trim().toLowerCase() === ALLOWED_EMAIL
+  return getAccessRole(email) !== 'none'
+}
+
+export function canEditEmail(email: string | null | undefined) {
+  return getAccessRole(email) === 'editor'
 }
 
 export function subscribeAuth(onUser: (user: User | null) => void): Unsubscribe {
@@ -37,12 +56,12 @@ export async function resolveRedirectSignIn() {
   return getRedirectResult(auth)
 }
 
-export async function loginWithGoogle() {
+export async function loginWithGoogle(): Promise<UserCredential | null> {
   const auth = getAuthClient()
   const provider = new GoogleAuthProvider()
   provider.setCustomParameters({ prompt: 'select_account' })
   try {
-    await signInWithPopup(auth, provider)
+    return await signInWithPopup(auth, provider)
   } catch (e) {
     // Redirect can fail on mobile browsers that partition or block storage,
     // so avoid sending those devices to a broken auth helper page.
@@ -54,7 +73,7 @@ export async function loginWithGoogle() {
         )
       }
       await signInWithRedirect(auth, provider)
-      return
+      return null
     }
     throw e
   }

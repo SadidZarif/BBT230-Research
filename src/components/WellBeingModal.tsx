@@ -53,12 +53,14 @@ export function WellBeingModal({
   row,
   onClose,
   onUpdate,
+  canEditNotes = true,
   theme: _theme,
 }: {
   open: boolean
   row: DailyRow | null
   onClose: () => void
   onUpdate?: (dayNumber: number, patch: Partial<DailyRecord>) => void
+  canEditNotes?: boolean
   theme?: 'light' | 'dark'
 }) {
   const modalRef = useRef<HTMLDivElement | null>(null)
@@ -97,6 +99,9 @@ export function WellBeingModal({
   }, [])
 
   function handleNotesChange(value: string) {
+    if (!canEditNotes) {
+      return
+    }
     setNotes(value)
     if (saveTimer.current != null) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
@@ -107,6 +112,9 @@ export function WellBeingModal({
   }
 
   function flushNotesSave() {
+    if (!canEditNotes) {
+      return
+    }
     if (saveTimer.current != null) window.clearTimeout(saveTimer.current)
     if (row && onUpdate) {
       onUpdate(row.dayNumber, { lowScoreNotes: notes })
@@ -313,25 +321,37 @@ export function WellBeingModal({
                             <div className="relative">
                               <textarea
                                 id={`notes-${row.dayNumber}`}
-                                className="relative w-full bg-slate-100 dark:bg-slate-900/80 border border-slate-300 dark:border-white/10 rounded-xl p-4 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-red-500/40 shadow-inner-3d h-[96px] resize-none box-border"
-                                placeholder="E.g. Work deadline, physical illness, environment changes..."
+                                className="relative w-full bg-slate-100 dark:bg-slate-900/80 border border-slate-300 dark:border-white/10 rounded-xl p-4 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-red-500/40 shadow-inner-3d h-[96px] resize-none box-border disabled:cursor-not-allowed disabled:opacity-80"
+                                placeholder={
+                                  canEditNotes
+                                    ? 'E.g. Work deadline, physical illness, environment changes...'
+                                    : 'View-only access: notes are locked for this account.'
+                                }
                                 value={notes}
+                                disabled={!canEditNotes}
                                 onChange={(e) => handleNotesChange(e.target.value)}
                                 onBlur={flushNotesSave}
                               />
                             </div>
                             <div className="flex min-h-[34px] flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                               <span className="pr-2 text-[11px] text-slate-500">
-                                Notes auto-save while you type.
+                                {canEditNotes ? 'Notes auto-save while you type.' : 'This account can view notes but cannot edit them.'}
                               </span>
                               <span
                                 className={`inline-flex min-w-[92px] justify-center items-center rounded-full px-2.5 py-1 text-[11px] font-semibold shrink-0 ${
-                                  hasUnsavedNotes
+                                  !canEditNotes
+                                    ? 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-400/20'
+                                    : hasUnsavedNotes
                                     ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-400/20'
                                     : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-400/20'
                                 }`}
                               >
-                                {hasUnsavedNotes ? (
+                                {!canEditNotes ? (
+                                  <>
+                                    <span className="material-symbols-outlined mr-1 text-[13px]">visibility_lock</span>
+                                    Read only
+                                  </>
+                                ) : hasUnsavedNotes ? (
                                   <>
                                     <span className="material-symbols-outlined mr-1 animate-spin text-[13px]">progress_activity</span>
                                     Saving...

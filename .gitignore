@@ -26,6 +26,9 @@ lerna-debug.log*
 # Output CSV file
 bbt230-researchh.csv
 
+# Firestore security rules file
+firestore.rules
+
 # Cursor / local tooling
 .cursor/
 
