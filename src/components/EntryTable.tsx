@@ -149,13 +149,7 @@ export function EntryTable({
         </div>
 
         <div className="md:overflow-y-auto md:flex-1 p-2 space-y-2 relative" id="table-body">
-          {readOnly ? (
-            <div className="px-3 pt-2">
-              <div className="rounded-2xl border border-amber-300/50 bg-amber-100/70 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-                This account has view-only access. Data and notes are locked for professors.
-              </div>
-            </div>
-          ) : null}
+        
 
           {rowsAsc.map((row) => {
             const complete = isRowComplete(row)

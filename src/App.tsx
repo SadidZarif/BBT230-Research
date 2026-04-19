@@ -85,7 +85,6 @@ export default function App() {
     normalizeRecordsToStudySchedule(loadRecords()),
   )
   const [modalDay, setModalDay] = useState<number | null>(null)
-  const [analyticsOpen, setAnalyticsOpen] = useState(false)
   const [sync, setSync] = useState<{ mode: 'cloud' | 'local' | 'error'; message?: string }>({
     mode: 'local',
   })
@@ -419,25 +418,25 @@ export default function App() {
         </div>
       </header>
 
-      <EntryTable rows={rows} onUpdate={updateRecord} onViewScore={(row) => setModalDay(row.dayNumber)} readOnly={!canEdit} />
-
-      <div className="pb-6 px-4 text-slate-500 text-xs font-mono z-10 flex flex-col items-start gap-1 sm:items-center sm:text-center">
-        <span>Data automatically saved on database.</span>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:justify-center">
+      <div className="w-full max-w-[1600px] px-4 sm:px-6 pb-4 z-10">
+        <div className="flex items-center justify-start">
           <button
-            className="text-primary cursor-pointer hover:underline"
+            className="btn-3d inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-secondary px-4 py-2 text-sm font-bold text-white"
             onClick={() => downloadTextFile('bbt230-research.csv', toCsv(rows))}
           >
+            <span className="material-symbols-outlined text-[18px]">download</span>
             Export to CSV
-          </button>
-          <span className="text-slate-400 dark:text-slate-600 hidden sm:inline">|</span>
-          <button className="text-primary cursor-pointer hover:underline" onClick={() => setAnalyticsOpen((v) => !v)}>
-            {analyticsOpen ? 'Hide Analytics' : 'Show Analytics'}
           </button>
         </div>
       </div>
 
-      {analyticsOpen ? <AnalyticsView rows={rows} theme={theme} /> : null}
+      <EntryTable rows={rows} onUpdate={updateRecord} onViewScore={(row) => setModalDay(row.dayNumber)} readOnly={!canEdit} />
+
+      <div className="pb-6 px-4 text-slate-500 text-xs font-mono z-10 flex flex-col items-start gap-1 sm:items-center sm:text-center">
+        <span>Data automatically saved on database.</span>
+      </div>
+
+      <AnalyticsView rows={rows} theme={theme} />
 
       <WellBeingModal
         open={modalDay != null}
