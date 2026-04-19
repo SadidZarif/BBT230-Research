@@ -20,6 +20,48 @@ function shoutGroupLabel(shoutCount: number) {
   return 'High shout'
 }
 
+type PairMetricKey = 'stress' | 'sleepHours' | 'studyMinutes' | 'food' | 'social'
+
+type PairMetricConfig = {
+  key: PairMetricKey
+  label: string
+  shortLabel: string
+  color: string
+  min: number
+  max?: number
+}
+
+const PAIR_METRICS: PairMetricConfig[] = [
+  { key: 'stress', label: 'Stress', shortLabel: 'Stress', color: '#f97316', min: 1, max: 10 },
+  { key: 'sleepHours', label: 'Sleep Hours', shortLabel: 'Sleep', color: '#3b82f6', min: 0, max: 8 },
+  { key: 'studyMinutes', label: 'Study Minutes', shortLabel: 'Study', color: '#a855f7', min: 0 },
+  { key: 'food', label: 'Food Score', shortLabel: 'Food', color: '#10b981', min: 1, max: 10 },
+  { key: 'social', label: 'Social Interaction', shortLabel: 'Social', color: '#ec4899', min: 1, max: 10 },
+]
+
+function metricValue(row: DailyRow, key: PairMetricKey) {
+  return row[key] as number
+}
+
+function metricMax(rows: DailyRow[], key: PairMetricKey, fallbackMin: number) {
+  const values = rows.map((row) => metricValue(row, key))
+  const maxValue = values.length > 0 ? Math.max(...values) : fallbackMin
+  if (key === 'studyMinutes') {
+    return Math.max(180, Math.ceil(maxValue / 30) * 30)
+  }
+  return maxValue
+}
+
+function buildMetricPairs(metrics: PairMetricConfig[]) {
+  const pairs: Array<{ x: PairMetricConfig; y: PairMetricConfig }> = []
+  for (let i = 0; i < metrics.length; i++) {
+    for (let j = i + 1; j < metrics.length; j++) {
+      pairs.push({ x: metrics[i]!, y: metrics[j]! })
+    }
+  }
+  return pairs
+}
+
 export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light' | 'dark' }) {
   const [isMobile, setIsMobile] = useState(false)
   const isDark = theme === 'dark'
@@ -114,6 +156,7 @@ export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light
   const legendTextStyleMobile = isDark ? { color: '#cbd5e1', fontSize: 10 } : { color: '#475569', fontSize: 10 }
   const lineChartHeight = isMobile ? 260 : 320
   const scatterChartHeight = isMobile ? 300 : 360
+  const pairScatterChartHeight = isMobile ? 280 : 320
   const chartGrid = isMobile
     ? { left: 34, right: 12, top: 24, bottom: 34 }
     : { left: 40, right: 20, top: 30, bottom: 40 }
@@ -127,6 +170,7 @@ export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light
     ? { ...axisLabelStyle, fontSize: 10, hideOverlap: true }
     : axisLabelStyle
   const valueAxisLabel = isMobile ? { ...axisLabelStyle, fontSize: 10 } : axisLabelStyle
+  const pairMetricPairs = buildMetricPairs(PAIR_METRICS)
 
   return (
     <section className="w-full max-w-[1600px] px-3 sm:px-4 pb-10 md:pb-12 z-10">
@@ -332,6 +376,129 @@ export function AnalyticsView({ rows, theme }: { rows: DailyRow[]; theme: 'light
                 ],
               }}
             />
+          </div>
+
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200/50 dark:border-white/5 xl:col-span-2 min-w-0">
+            <h3 className="text-slate-900 dark:text-white font-bold mb-1">Lifestyle Variable Pairs</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-xs mb-4">
+              All 10 pairwise scatter plots across stress, sleep, study, food, and social interaction.
+            </p>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {pairMetricPairs.map(({ x, y }) => {
+                const pairData = sorted.map((row) => ({
+                  value: [metricValue(row, x.key), metricValue(row, y.key), row.dayNumber],
+                  dateLabel: fmtShort(row.dateISO),
+                  shoutCount: row.shoutCount as number,
+                  group: shoutGroupLabel(row.shoutCount as number),
+                }))
+                const lowData = pairData.filter((point) => point.group === 'Low shout')
+                const moderateData = pairData.filter((point) => point.group === 'Moderate shout')
+                const highData = pairData.filter((point) => point.group === 'High shout')
+                const xMax = x.max ?? metricMax(sorted, x.key, x.min)
+                const yMax = y.max ?? metricMax(sorted, y.key, y.min)
+
+                return (
+                  <div key={`${x.key}-${y.key}`} className="rounded-2xl border border-slate-200/60 dark:border-white/5 bg-white/30 dark:bg-slate-950/10 p-3 sm:p-4 min-w-0">
+                    <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                      {x.shortLabel} vs {y.shortLabel}
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Daily relationship between {x.label.toLowerCase()} and {y.label.toLowerCase()}.
+                    </p>
+                    <ReactECharts
+                      style={{ height: pairScatterChartHeight }}
+                      option={{
+                        backgroundColor: 'transparent',
+                        grid: {
+                          left: isMobile ? 42 : 55,
+                          right: isMobile ? 10 : 20,
+                          top: isMobile ? 54 : 38,
+                          bottom: isMobile ? 42 : 52,
+                        },
+                        legend: {
+                          top: 0,
+                          itemWidth: 10,
+                          itemHeight: 10,
+                          data: ['Low shout', 'Moderate shout', 'High shout'],
+                          itemGap: isMobile ? 8 : 16,
+                          textStyle: isMobile ? legendTextStyleMobile : legendTextStyle,
+                        },
+                        xAxis: {
+                          type: 'value',
+                          min: x.min,
+                          max: xMax,
+                          name: x.shortLabel,
+                          nameLocation: 'middle',
+                          nameGap: isMobile ? 26 : 32,
+                          nameTextStyle: axisNameTextStyle,
+                          axisLabel: valueAxisLabel,
+                          axisLine: axisLineStyle,
+                          splitLine: splitLineStyle,
+                        },
+                        yAxis: {
+                          type: 'value',
+                          min: y.min,
+                          max: yMax,
+                          name: y.shortLabel,
+                          nameLocation: 'middle',
+                          nameGap: isMobile ? 32 : 42,
+                          nameTextStyle: axisNameTextStyle,
+                          axisLabel: valueAxisLabel,
+                          axisLine: axisLineStyle,
+                          splitLine: splitLineStyle,
+                        },
+                        tooltip: {
+                          trigger: 'item',
+                          ...tooltipStyle,
+                          formatter: (params: {
+                            data?: { value?: [number, number, number]; dateLabel?: string; shoutCount?: number }
+                          }) =>
+                            `Day ${params.data?.value?.[2] ?? '--'} (${params.data?.dateLabel ?? '--'})<br/>${x.label}: ${params.data?.value?.[0] ?? '--'}<br/>${y.label}: ${params.data?.value?.[1] ?? '--'}<br/>Shout Count: ${params.data?.shoutCount ?? '--'}`,
+                        },
+                        series: [
+                          {
+                            name: 'Low shout',
+                            type: 'scatter',
+                            data: lowData,
+                            symbolSize: 10,
+                            itemStyle: {
+                              color: '#22c55e',
+                              shadowBlur: 14,
+                              shadowColor: 'rgba(34,197,94,0.3)',
+                              opacity: 0.9,
+                            },
+                          },
+                          {
+                            name: 'Moderate shout',
+                            type: 'scatter',
+                            data: moderateData,
+                            symbolSize: 10,
+                            itemStyle: {
+                              color: '#f59e0b',
+                              shadowBlur: 14,
+                              shadowColor: 'rgba(245,158,11,0.3)',
+                              opacity: 0.9,
+                            },
+                          },
+                          {
+                            name: 'High shout',
+                            type: 'scatter',
+                            data: highData,
+                            symbolSize: 10,
+                            itemStyle: {
+                              color: '#ef4444',
+                              shadowBlur: 14,
+                              shadowColor: 'rgba(239,68,68,0.3)',
+                              opacity: 0.9,
+                            },
+                          },
+                        ],
+                      }}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200/50 dark:border-white/5 min-w-0">
