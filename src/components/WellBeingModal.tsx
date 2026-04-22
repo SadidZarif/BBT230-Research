@@ -510,10 +510,7 @@ export function WellBeingModal({
                   </>
                 )}
 
-                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex justify-between items-center z-10">
-                  <span className="text-xs text-slate-500 font-medium italic">
-                    Data generated from research study #4021
-                  </span>
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex justify-end items-center z-10">
                   <div className="flex items-center gap-2">
                     <div
                       className={`h-2 w-2 rounded-full animate-pulse ${
